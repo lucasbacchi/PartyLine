@@ -24,6 +24,16 @@ The Twilio client is exposed by `src/twilio.ts` for future SMS and voice routes.
 
 All purchased Twilio numbers should point to the same backend webhook paths. Incoming webhook `To` values will be normalized and used to look up the owning location in Firestore; the backend must never select a tenant from a client-provided Firebase user ID.
 
+The initial webhook endpoints are:
+
+- `POST /twilio/webhooks/voice` returns a basic TwiML voice response.
+- `POST /twilio/webhooks/sms` returns a basic TwiML SMS response.
+- `GET /twilio/health` verifies that the Twilio credentials are configured and that the API key can access the account's phone-number resources.
+
+Both endpoints validate `X-Twilio-Signature`. Set `PUBLIC_BASE_URL` to the exact public URL Twilio calls (for example, `https://api.example.com`) when using Cloud Run or a tunnel. When testing directly on `localhost`, leave it as `http://localhost:8080` and use that URL in the Twilio Console only if Twilio can reach it through a tunnel.
+
+The backend does not globally trust forwarded client IP headers. This keeps IP-based rate limiting effective; `PUBLIC_BASE_URL` is used for Twilio signature URL construction instead of trusting proxy headers.
+
 Do not commit `.env` or place any Twilio secret in `deploy.ps1`. For Cloud Run, provide the four `TWILIO_*` values through Secret Manager-backed environment variables instead of storing them in source control or passing them as command-line arguments.
 
 ## Firebase connection endpoints

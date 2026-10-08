@@ -13,47 +13,43 @@ export function meta({}: Route.MetaArgs) {
 }
 //
 
-type Theme = 'light' | 'dark';
+type Theme = "light" | "dark";
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('theme') as Theme | null;
-      if (savedTheme) return savedTheme;
-      
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      return prefersDark ? 'dark' : 'light';
-    }
-    return 'light';
-  });
+    const [theme, setTheme] = useState<Theme>(() => {
+        if (typeof window !== "undefined") {
+            const savedTheme = localStorage.getItem("theme") as Theme | null;
+            if (savedTheme) return savedTheme;
 
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+            const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            return prefersDark ? "dark" : "light";
+        }
+        return "light";
+    });
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
-  };
+    useEffect(() => {
+        const root = document.documentElement;
+        if (theme === "dark") {
+            root.classList.add("dark");
+        } else {
+            root.classList.remove("dark");
+        }
+        localStorage.setItem("theme", theme);
+    }, [theme]);
 
-  return { theme, toggleTheme };
+    const toggleTheme = () => {
+        setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    };
+
+    return { theme, toggleTheme };
 }
-
-
 
 //
 
 //
 
 export const ThemeToggle: React.FC = () => {
-  const { theme, toggleTheme } = useTheme();
-
-  ;
+    const { theme, toggleTheme } = useTheme();
 };
 //
 
@@ -81,9 +77,9 @@ export default function HomePage() {
     async function handlePhoneSignIn() {
         setIsSigningIn(true);
         setErrorMessage(null);
-        
+
         try {
-            await signInWithPopup(auth, new GoogleAuthProvider); // implement phone sign in... twilio auth...
+            await signInWithPopup(auth, new GoogleAuthProvider()); // implement phone sign in... twilio auth...
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Phone Number.");
         } finally {
@@ -146,7 +142,9 @@ export default function HomePage() {
             <section className="w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
                 <div>
                     <h1 className="text-2xl font-semibold">Welcome to PartyLine!</h1>
-                    <p className="mt-2 text-gray-600 dark:text-gray-400">Test Google + phone number authentication...</p>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400">
+                        Test Google + phone number authentication...
+                    </p>
                 </div>
 
                 {user ? (

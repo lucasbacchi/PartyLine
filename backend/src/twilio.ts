@@ -32,3 +32,35 @@ export function getTwilioClient(): Twilio {
 export function getTwilioWebhookAuthToken(): string {
     return getRequiredEnvironmentVariable("TWILIO_AUTH_TOKEN");
 }
+
+export async function checkTwilioServices(): Promise<Record<string, "ok" | "error">> {
+    let configStatus: "ok" | "error" = "ok";
+
+    try {
+        getTwilioConfig();
+        getTwilioWebhookAuthToken();
+    } catch {
+        configStatus = "error";
+    }
+
+    if (configStatus === "error") {
+        return {
+            config: configStatus,
+            api: "error"
+        };
+    }
+
+    try {
+        await getTwilioClient().incomingPhoneNumbers.list({ limit: 1 });
+        return {
+            config: "ok",
+            api: "ok"
+        };
+    } catch (error) {
+        console.error("Twilio API health check failed", error);
+        return {
+            config: "ok",
+            api: "error"
+        };
+    }
+}
