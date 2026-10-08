@@ -1,6 +1,7 @@
 // add light/dark mode toggle button
 // add sign in w/phone number button
 // stylize buttons (add google icon to sign in w/google button, add spinner to buttons when loading, add hover effects, etc.)
+// inspo: PeerSchedule and Firebase landing pages
 
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
