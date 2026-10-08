@@ -21,7 +21,7 @@ const appCheck =
     typeof window !== "undefined" && appCheckSiteKey
         ? initializeAppCheck(app, {
               provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
-              isTokenAutoRefreshEnabled: true,
+              isTokenAutoRefreshEnabled: true
           })
         : undefined;
 const auth = getAuth(app);

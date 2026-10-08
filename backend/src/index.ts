@@ -1,3 +1,4 @@
+import "dotenv/config";
 import cors from "cors";
 import express, { type Request, type Response } from "express";
 import { checkFirebaseServices } from "./firebase.js";
@@ -32,7 +33,7 @@ app.get("/firebase/health", publicRateLimit, async (_req: Request, res: Response
     res.status(status === "ok" ? 200 : 503).json({
         status,
         services,
-        appCheck: "available",
+        appCheck: "available"
     });
 });
 
@@ -45,12 +46,12 @@ protectedApi.get("/protected", (_req: Request, res: Response) => {
     res.json({
         status: "ok",
         appCheck: {
-            appId: res.locals.appCheck.appId,
+            appId: res.locals.appCheck.appId
         },
         user: {
             uid: res.locals.user.uid,
-            email: res.locals.user.email ?? null,
-        },
+            email: res.locals.user.email ?? null
+        }
     });
 });
 app.use("/firebase", protectedApi);

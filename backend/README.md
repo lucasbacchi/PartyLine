@@ -9,7 +9,22 @@ npm install
 npm run dev
 ```
 
-The service listens on `http://localhost:8080` by default. Copy `.env.example` to `.env` when using the Firebase emulators.
+The service listens on `http://localhost:8080` by default. Copy `.env.example` to `.env` for local development. The backend loads that file automatically; the Firebase emulator variables are only needed when using the Firebase emulators.
+
+## Twilio setup
+
+The backend is prepared to use Twilio's Node.js SDK with an API key. In the Twilio Console:
+
+1. Open **Account > API keys & tokens**.
+2. Create a **Standard** API key and copy the key SID and secret. The secret is shown only once.
+3. Copy the Account SID and Auth Token from the Twilio Console.
+4. Add the Account SID, API key SID, API key secret, and Auth Token to your local `backend/.env` using the names in `.env.example`. Do not add an individual phone number; numbers are tenant/location data.
+
+The Twilio client is exposed by `src/twilio.ts` for future SMS and voice routes. It is initialized only when `getTwilioClient()` is called, so local development and Firebase health checks continue to work before Twilio credentials are configured. `getTwilioWebhookAuthToken()` provides the credential needed to validate signatures on inbound webhooks.
+
+All purchased Twilio numbers should point to the same backend webhook paths. Incoming webhook `To` values will be normalized and used to look up the owning location in Firestore; the backend must never select a tenant from a client-provided Firebase user ID.
+
+Do not commit `.env` or place any Twilio secret in `deploy.ps1`. For Cloud Run, provide the four `TWILIO_*` values through Secret Manager-backed environment variables instead of storing them in source control or passing them as command-line arguments.
 
 ## Firebase connection endpoints
 

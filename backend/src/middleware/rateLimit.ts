@@ -10,7 +10,7 @@ export const publicRateLimit = rateLimit({
     standardHeaders: "draft-8",
     legacyHeaders: false,
     skip: skipPreflight,
-    message: { error: "Too many requests. Please try again later." },
+    message: { error: "Too many requests. Please try again later." }
 });
 
 export const authenticatedRateLimit = rateLimit({
@@ -20,7 +20,7 @@ export const authenticatedRateLimit = rateLimit({
     legacyHeaders: false,
     skip: skipPreflight,
     keyGenerator: (_req, res) => `user:${res.locals.user.uid}`,
-    message: { error: "Too many requests. Please try again later." },
+    message: { error: "Too many requests. Please try again later." }
 });
 
 export const writeRateLimit = rateLimit({
@@ -30,5 +30,5 @@ export const writeRateLimit = rateLimit({
     legacyHeaders: false,
     skip: skipPreflight,
     keyGenerator: (_req, res) => `user:${res.locals.user.uid}`,
-    message: { error: "Too many write requests. Please try again later." },
+    message: { error: "Too many write requests. Please try again later." }
 });
