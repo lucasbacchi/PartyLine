@@ -27,10 +27,12 @@ All purchased Twilio numbers should point to the same backend webhook paths. Inc
 The initial webhook endpoints are:
 
 - `POST /twilio/webhooks/voice` returns a basic TwiML voice response.
-- `POST /twilio/webhooks/sms` returns a basic TwiML SMS response.
+- `POST /twilio/webhooks/sms` acknowledges the inbound message without sending an automatic reply.
 - `GET /twilio/health` verifies that the Twilio credentials are configured and that the API key can access the account's phone-number resources.
 
-Both endpoints validate `X-Twilio-Signature`. Set `PUBLIC_BASE_URL` to the exact public URL Twilio calls (for example, `https://api.example.com`) when using Cloud Run or a tunnel. When testing directly on `localhost`, leave it as `http://localhost:8080` and use that URL in the Twilio Console only if Twilio can reach it through a tunnel.
+Both endpoints validate `X-Twilio-Signature`. Set `PUBLIC_BASE_URL` to the exact public URL Twilio calls (for example, `https://dev-partyline.example.com`) when using Cloud Run or a tunnel. It must include only the origin, not the webhook path. When using a tunnel, do not leave it set to `http://localhost:8080`; Twilio signs the public tunnel URL, not the local origin.
+
+Sending an SMS reply from the webhook or from the backend will require US A2P 10DLC registration for the sending number, including brand and campaign registration. An unregistered US local number can receive inbound messages but Twilio may reject outbound messages with error 30034.
 
 The backend does not globally trust forwarded client IP headers. This keeps IP-based rate limiting effective; `PUBLIC_BASE_URL` is used for Twilio signature URL construction instead of trusting proxy headers.
 

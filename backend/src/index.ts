@@ -20,8 +20,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 function getWebhookUrl(req: Request): string {
-    const baseUrl = process.env.PUBLIC_BASE_URL?.trim() ?? `${req.protocol}://${req.get("host")}`;
-    return new URL(req.originalUrl, `${baseUrl.replace(/\/+$/, "")}/`).toString();
+    const baseUrl = process.env.PUBLIC_BASE_URL?.trim();
+
+    if (!baseUrl) {
+        throw new Error("PUBLIC_BASE_URL is required for Twilio webhook validation");
+    }
+
+    const parsedBaseUrl = new URL(baseUrl);
+
+    if (parsedBaseUrl.protocol !== "http:" && parsedBaseUrl.protocol !== "https:") {
+        throw new Error("PUBLIC_BASE_URL must use http or https");
+    }
+
+    return new URL(req.originalUrl, `${parsedBaseUrl.toString().replace(/\/+$/, "")}/`).toString();
 }
 
 function requireValidTwilioRequest(req: Request, res: Response): boolean {
@@ -33,14 +44,16 @@ function requireValidTwilioRequest(req: Request, res: Response): boolean {
     }
 
     try {
+        const webhookUrl = getWebhookUrl(req);
         const isValid = twilio.validateRequest(
             getTwilioWebhookAuthToken(),
             signature,
-            getWebhookUrl(req),
+            webhookUrl,
             req.body as Record<string, string>
         );
 
         if (!isValid) {
+            console.warn(`Rejected Twilio webhook signature for ${req.method} ${webhookUrl}`);
             res.status(401).type("text/plain").send("Invalid Twilio signature");
             return false;
         }
@@ -48,7 +61,7 @@ function requireValidTwilioRequest(req: Request, res: Response): boolean {
         return true;
     } catch (error) {
         console.error("Twilio webhook validation failed", error);
-        res.status(503).type("text/plain").send("Twilio webhook validation is unavailable");
+        res.status(500).type("text/plain").send("Twilio webhook validation is unavailable");
         return false;
     }
 }
@@ -94,7 +107,6 @@ app.post("/twilio/webhooks/sms", (req: Request, res: Response) => {
     }
 
     const response = new twilio.twiml.MessagingResponse();
-    response.message("Your message has been received by PartyLine.");
 
     res.type("text/xml").send(response.toString());
 });
