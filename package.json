@@ -27,14 +27,14 @@
         "@vitejs/plugin-react": "^6.1.2",
         "eslint": "^10.12.0",
         "eslint-config-prettier": "^10.1.8",
-        "firebase-tools": "^15.32.1",
+        "firebase-tools": "^15.33.0",
         "globals": "^17.13.0",
         "npm-check-updates": "^23.1.0",
         "prettier": "^3.9.9",
         "tailwindcss": "^4.3.3",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.71.1",
-        "vite": "^8.3.2"
+        "vite": "^8.3.4"
     },
     "scripts": {
         "dev": "react-router dev",
