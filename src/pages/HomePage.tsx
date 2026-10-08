@@ -46,17 +46,24 @@ export default function HomePage() {
         setBackendStatus(null);
 
         try {
-            const token = await getFirebaseAppCheckToken();
+            if (!user) {
+                throw new Error("You must be signed in to test the backend.");
+            }
+
+            const [appCheckToken, idToken] = await Promise.all([getFirebaseAppCheckToken(), user.getIdToken()]);
             const response = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8080"}/firebase/protected`, {
-                headers: { "X-Firebase-AppCheck": token },
+                headers: {
+                    Authorization: `Bearer ${idToken}`,
+                    "X-Firebase-AppCheck": appCheckToken,
+                },
             });
-            const body = (await response.json()) as { error?: string; status?: string };
+            const body = (await response.json()) as { error?: string; status?: string; user?: { email?: string | null } };
 
             if (!response.ok) {
                 throw new Error(body.error ?? "The backend rejected the App Check token.");
             }
 
-            setBackendStatus("Firebase App Check accepted by the backend.");
+            setBackendStatus(`Backend accepted App Check and Firebase Auth for ${body.user?.email ?? "the signed-in user"}.`);
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : "Unable to test the backend connection.");
         } finally {
