@@ -1,3 +1,7 @@
+// add light/dark mode toggle button
+// add sign in w/phone number button
+// stylize buttons (add google icon to sign in w/google button, add spinner to buttons when loading, add hover effects, etc.)
+
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
 
@@ -7,6 +11,51 @@ import { auth, getFirebaseAppCheckToken } from "../firebase";
 export function meta({}: Route.MetaArgs) {
     return [{ title: "PartyLine" }, { name: "description", content: "Sign in to PartyLine with Google." }];
 }
+//
+
+type Theme = 'light' | 'dark';
+
+export function useTheme() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('theme') as Theme | null;
+      if (savedTheme) return savedTheme;
+      
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return prefersDark ? 'dark' : 'light';
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
+
+  return { theme, toggleTheme };
+}
+
+
+
+//
+
+//
+
+export const ThemeToggle: React.FC = () => {
+  const { theme, toggleTheme } = useTheme();
+
+  ;
+};
+//
 
 export default function HomePage() {
     const [user, setUser] = useState<User | null>(null);
@@ -25,6 +74,18 @@ export default function HomePage() {
             await signInWithPopup(auth, new GoogleAuthProvider());
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Google.");
+        } finally {
+            setIsSigningIn(false);
+        }
+    }
+    async function handlePhoneSignIn() {
+        setIsSigningIn(true);
+        setErrorMessage(null);
+        
+        try {
+            await signInWithPopup(auth, new GoogleAuthProvider); // implement phone sign in... twilio auth...
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Phone Number.");
         } finally {
             setIsSigningIn(false);
         }
@@ -75,8 +136,8 @@ export default function HomePage() {
         <main className="flex min-h-screen items-center justify-center p-6">
             <section className="w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
                 <div>
-                    <h1 className="text-2xl font-semibold">Welcome to PartyLine</h1>
-                    <p className="mt-2 text-gray-600 dark:text-gray-400">Test Google authentication.</p>
+                    <h1 className="text-2xl font-semibold">Welcome to PartyLine!</h1>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400">Test Google + phone number authentication...</p>
                 </div>
 
                 {user ? (
@@ -101,14 +162,24 @@ export default function HomePage() {
                         </button>
                     </div>
                 ) : (
-                    <button
-                        type="button"
-                        onClick={handleGoogleSignIn}
-                        disabled={isSigningIn}
-                        className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {isSigningIn ? "Signing in..." : "Sign in with Google"}
-                    </button>
+                    <div className="space-y-3">
+                        <button
+                            type="button"
+                            onClick={handleGoogleSignIn}
+                            disabled={isSigningIn}
+                            className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {isSigningIn ? "Signing in..." : "Sign in with Google"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handlePhoneSignIn}
+                            disabled={isSigningIn}
+                            className="w-full rounded-md bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {isSigningIn ? "Signing in..." : "Sign in with Phone Number"}
+                        </button>
+                    </div>
                 )}
 
                 {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
