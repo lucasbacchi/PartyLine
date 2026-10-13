@@ -10,7 +10,7 @@
     "dependencies": {
         "@react-router/node": "^8.4.0",
         "@react-router/serve": "^8.4.0",
-        "firebase": "^12.19.0",
+        "firebase": "^13.0.0",
         "isbot": "^5.2.2",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
@@ -29,11 +29,11 @@
         "eslint-config-prettier": "^10.1.8",
         "firebase-tools": "^15.33.0",
         "globals": "^17.13.0",
-        "npm-check-updates": "^23.1.0",
-        "prettier": "^3.9.9",
+        "npm-check-updates": "^23.1.1",
+        "prettier": "^3.9.10",
         "tailwindcss": "^4.3.3",
         "typescript": "^6.0.3",
-        "typescript-eslint": "^8.71.1",
+        "typescript-eslint": "^8.71.2",
         "vite": "^8.3.4"
     },
     "scripts": {
