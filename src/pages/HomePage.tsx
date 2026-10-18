@@ -1,16 +1,19 @@
-// add light/dark mode toggle button
-// add sign in w/phone number button
-// stylize buttons (add google icon to sign in w/google button, add spinner to buttons when loading, add hover effects, etc.)
+// add light/dark mode (complete)
+// add sign in w/phone number button (complete w/recaptcha)
+// stylize buttons (add google icon to sign in w/google button, add spinner to buttons when loading, add hover effects, etc.) (later feature)
 // inspo: PeerSchedule and Firebase landing pages
 
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithPhoneNumber, RecaptchaVerifier, signOut, type User } from "firebase/auth";
+import { useEffect, useRef, useState } from "react";
 
 import type { Route } from "./+types/HomePage";
 import { auth, getFirebaseAppCheckToken } from "../firebase";
 
 export function meta({}: Route.MetaArgs) {
     return [{ title: "PartyLine" }, { name: "description", content: "Sign in to PartyLine with Google." }];
+}
+export function metaPhone({}: Route.MetaArgs) {
+    return [{ title: "PartyLine" }, { name: "description", content: "Sign in to PartyLine with Phone Number." }];
 }
 //
 
@@ -60,8 +63,10 @@ export default function HomePage() {
     const [isTestingBackend, setIsTestingBackend] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [backendStatus, setBackendStatus] = useState<string | null>(null);
+    const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
 
     useEffect(() => onAuthStateChanged(auth, setUser), []);
+    useEffect(() => () => recaptchaVerifier.current?.clear(), []);
 
     async function handleGoogleSignIn() {
         setIsSigningIn(true);
@@ -78,9 +83,22 @@ export default function HomePage() {
     async function handlePhoneSignIn() {
         setIsSigningIn(true);
         setErrorMessage(null);
-
+        function getPhoneNumber() {
+            const phoneNumber = prompt("Enter your phone number (with country code (e.g., +1)):");
+            if (!phoneNumber) {
+                throw new Error("Phone number is required.");
+            }
+            return phoneNumber;
+        }
         try {
-            await signInWithPopup(auth, new GoogleAuthProvider()); // implement phone sign in... twilio auth...
+            recaptchaVerifier.current ??= new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+            const confirmation = await signInWithPhoneNumber(auth, getPhoneNumber(), recaptchaVerifier.current);
+            const verificationCode = prompt("Enter the verification code sent to your phone:");
+            if (!verificationCode) {
+                throw new Error("Verification code is required.");
+            }
+            await confirmation.confirm(verificationCode);
+            
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Phone Number.");
         } finally {
@@ -139,12 +157,16 @@ export default function HomePage() {
     }
 
     return (
+    
         <main className="flex min-h-screen items-center justify-center p-6">
-            <section className="w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
+            <div className="absolute top-4 center-4">
+                <h1 className="text-2xl font-semibold">PartyLine</h1>
+            </div>
+            <section className="flex flex-col items-center">
                 <div>
-                    <h1 className="text-2xl font-semibold">Welcome to PartyLine!</h1>
-                    <p className="mt-2 text-gray-600 dark:text-gray-400">
-                        Test Google + phone number authentication...
+                    <h1 className="text-2xl font-semibold text-center justify-center ">Welcome to PartyLine!</h1>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400 text-center justify-center inset">
+                        PartyLine is a flexible phone system management tool that allows for seamless sharing of a number between multiple parties.
                     </p>
                 </div>
 
@@ -170,12 +192,18 @@ export default function HomePage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="space-y-3">
-                        <button
+                    
+    
+                    
+                    <div className="mt-8 w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
+                       <p className="mt-2 text-gray-600 dark:text-gray-400">
+                        [TEST] Let's Party! Sign in with Google or Phone Number to access PartyLine's features. Your data is secure and protected with Firebase App Check.
+                       </p> 
+                    <button
                             type="button"
                             onClick={handleGoogleSignIn}
                             disabled={isSigningIn}
-                            className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-md bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60 transition-transform duration-200 ease-in-out hover:scale-105"
                         >
                             {isSigningIn ? "Signing in..." : "Sign in with Google"}
                         </button>
@@ -183,10 +211,12 @@ export default function HomePage() {
                             type="button"
                             onClick={handlePhoneSignIn}
                             disabled={isSigningIn}
-                            className="w-full rounded-md bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-md bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60 transition-transform duration-200 ease-in-out hover:scale-105"
+
                         >
                             {isSigningIn ? "Signing in..." : "Sign in with Phone Number"}
                         </button>
+                        <div id="recaptcha-container" />
                     </div>
                 )}
 
