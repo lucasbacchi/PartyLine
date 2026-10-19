@@ -45,6 +45,8 @@ Do not commit `.env` or place any Twilio secret in `deploy.ps1`. For Cloud Run, 
 
 Opening `/firebase/protected` directly in a browser or calling it without both headers is expected to return `401`. App Check tokens must be minted by the Firebase client SDK, and Firebase ID tokens must come from a signed-in user. Configure the web app's reCAPTCHA Enterprise site key as `VITE_FIREBASE_APPCHECK_SITE_KEY`; the frontend then sends both tokens in the required headers.
 
+When running the frontend with `npm run dev`, App Check automatically enables Firebase's web debug-token mode. The browser console prints a generated debug token the first time the app starts. Register that token in Firebase Console under **App Check > Apps > Manage debug tokens**. The backend uses `FIREBASE_PROJECT_ID` (defaulting to `partyline-phone-system`) so local credentials cannot accidentally verify against a different Firebase project. The debug token must be registered for the web app with app ID `1:488790666782:web:12d5abad9b408dd33e480f`. Do not enable debug-token mode in production builds.
+
 New application routes should be added to the protected router in `src/index.ts` so they inherit both checks. Keep liveness and health endpoints outside that router.
 
 The protected router also applies an in-memory Express rate limit of 120 requests per authenticated user per minute. Public Firebase diagnostics are limited to 60 requests per IP per minute, while the liveness endpoint remains unrestricted for Cloud Run health checks. Use the exported `writeRateLimit` middleware for mutation routes; it allows 30 requests per authenticated user per minute.

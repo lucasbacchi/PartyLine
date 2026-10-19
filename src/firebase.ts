@@ -17,6 +17,13 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+const isDevelopment = import.meta.env.DEV;
+
+if (typeof window !== "undefined" && isDevelopment) {
+    (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+        true;
+}
+
 const appCheck =
     typeof window !== "undefined" && appCheckSiteKey
         ? initializeAppCheck(app, {
@@ -34,7 +41,7 @@ function getFirebaseAppCheck(): AppCheck {
     }
 
     if (!appCheck) {
-        throw new Error("VITE_FIREBASE_APPCHECK_SITE_KEY is not configured.");
+        throw new Error("VITE_FIREBASE_APPCHECK_SITE_KEY is required to initialize Firebase App Check.");
     }
 
     return appCheck;
