@@ -197,7 +197,7 @@ export default function HomePage() {
                     
                     <div className="mt-8 w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
                        <p className="mt-2 text-gray-600 dark:text-gray-400">
-                        [TEST] Let's Party! Sign in with Google or Phone Number to access PartyLine's features. Your data is secure and protected with Firebase App Check.
+                        [TEST] Let's Party! Sign in with Google or Phone Number to access PartyLine's features.
                        </p> 
                     <button
                             type="button"
