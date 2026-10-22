@@ -18,6 +18,8 @@ export const db = getFirestore(firebaseApp);
 export const storage = getStorage(firebaseApp);
 export const appCheck = getAppCheck(firebaseApp);
 
+export type TenantRole = "owner" | "admin" | "member" | "viewer";
+
 export async function checkFirebaseServices(): Promise<Record<string, "ok" | "error">> {
     const checks = await Promise.allSettled([
         auth.listUsers(1),

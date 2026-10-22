@@ -33,6 +33,14 @@ export function getTwilioWebhookAuthToken(): string {
     return getRequiredEnvironmentVariable("TWILIO_AUTH_TOKEN");
 }
 
+export function validateTwilioPhoneNumber(value: unknown, fieldName: string): string {
+    if (typeof value !== "string" || !/^\+[1-9]\d{7,14}$/.test(value.trim())) {
+        throw new Error(`${fieldName} must be an E.164 phone number, such as +15551234567.`);
+    }
+
+    return value.trim();
+}
+
 export async function checkTwilioServices(): Promise<Record<string, "ok" | "error">> {
     let configStatus: "ok" | "error" = "ok";
 

@@ -35,3 +35,12 @@ export async function requireFirebaseAuth(req: Request, res: Response, next: Nex
         res.status(401).json({ error: "Invalid Firebase ID token" });
     }
 }
+
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+    if (res.locals.user?.admin !== true) {
+        res.status(403).json({ error: "Administrator access is required." });
+        return;
+    }
+
+    next();
+}

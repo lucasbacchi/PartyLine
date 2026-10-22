@@ -49,6 +49,12 @@ When running the frontend with `npm run dev`, App Check automatically enables Fi
 
 New application routes should be added to the protected router in `src/index.ts` so they inherit both checks. Keep liveness and health endpoints outside that router.
 
+The admin debug routes require the Firebase ID token to include the boolean custom claim `admin: true`; this is checked on the server and cannot be granted by the client. Set it with the Firebase Admin SDK from a trusted administrative environment, for example `await getAuth().setCustomUserClaims(uid, { admin: true })`, then have the user sign out and back in (or refresh their ID token). The routes are `GET /admin/status`, `POST /admin/twilio/sms`, and `POST /admin/twilio/call`. Both outbound test routes require E.164 `to` and `from` numbers; the `from` number must be owned or verified in Twilio.
+
+Inbound Twilio webhooks record received SMS and call metadata in `twilio_events`. Admins can query the latest item with `GET /admin/twilio/events/latest?type=sms` or `type=call`. The Firestore query may require the composite index in `firestore.indexes.json` when deployed.
+
+Tenant membership is stored at `tenants/{tenantId}/members/{uid}`. Admin users can list, create, read, update, change roles, and delete tenant users through `/admin/tenants/{tenantId}/users`. Supported roles are `owner`, `admin`, `member`, and `viewer`. The temporary `POST /admin/bootstrap/promote` route is available for Postman but requires the `X-Bootstrap-Admin-Secret` header to match `BOOTSTRAP_ADMIN_SECRET`; remove or disable this route after the first administrator is established.
+
 The protected router also applies an in-memory Express rate limit of 120 requests per authenticated user per minute. Public Firebase diagnostics are limited to 60 requests per IP per minute, while the liveness endpoint remains unrestricted for Cloud Run health checks. Use the exported `writeRateLimit` middleware for mutation routes; it allows 30 requests per authenticated user per minute.
 
 These limits are per Cloud Run instance. They provide basic protection, but a shared store or an upstream control such as Cloud Armor should be added before relying on them for a multi-instance production deployment.

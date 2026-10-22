@@ -3,7 +3,15 @@
 // stylize buttons (add google icon to sign in w/google button, add spinner to buttons when loading, add hover effects, etc.) (later feature)
 // inspo: PeerSchedule and Firebase landing pages
 
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithPhoneNumber, RecaptchaVerifier, signOut, type User } from "firebase/auth";
+import {
+    GoogleAuthProvider,
+    onAuthStateChanged,
+    signInWithPopup,
+    signInWithPhoneNumber,
+    RecaptchaVerifier,
+    signOut,
+    type User
+} from "firebase/auth";
 import { useEffect, useRef, useState } from "react";
 
 import type { Route } from "./+types/HomePage";
@@ -98,7 +106,6 @@ export default function HomePage() {
                 throw new Error("Verification code is required.");
             }
             await confirmation.confirm(verificationCode);
-            
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Phone Number.");
         } finally {
@@ -157,7 +164,6 @@ export default function HomePage() {
     }
 
     return (
-    
         <main className="flex min-h-screen items-center justify-center p-6">
             <div className="absolute top-4 center-4">
                 <h1 className="text-2xl font-semibold">PartyLine</h1>
@@ -166,7 +172,8 @@ export default function HomePage() {
                 <div>
                     <h1 className="text-2xl font-semibold text-center justify-center ">Welcome to PartyLine!</h1>
                     <p className="mt-2 text-gray-600 dark:text-gray-400 text-center justify-center inset">
-                        PartyLine is a flexible phone system management tool that allows for seamless sharing of a number between multiple parties.
+                        PartyLine is a flexible phone system management tool that allows for seamless sharing of a
+                        number between multiple parties.
                     </p>
                 </div>
 
@@ -192,14 +199,11 @@ export default function HomePage() {
                         </button>
                     </div>
                 ) : (
-                    
-    
-                    
                     <div className="mt-8 w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
-                       <p className="mt-2 text-gray-600 dark:text-gray-400">
-                        [TEST] Let's Party! Sign in with Google or Phone Number to access PartyLine's features.
-                       </p> 
-                    <button
+                        <p className="mt-2 text-gray-600 dark:text-gray-400">
+                            [TEST] Let's Party! Sign in with Google or Phone Number to access PartyLine's features.
+                        </p>
+                        <button
                             type="button"
                             onClick={handleGoogleSignIn}
                             disabled={isSigningIn}
@@ -212,7 +216,6 @@ export default function HomePage() {
                             onClick={handlePhoneSignIn}
                             disabled={isSigningIn}
                             className="w-full rounded-md bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60 transition-transform duration-200 ease-in-out hover:scale-105"
-
                         >
                             {isSigningIn ? "Signing in..." : "Sign in with Phone Number"}
                         </button>
