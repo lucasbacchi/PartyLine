@@ -5,12 +5,20 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
 const firebaseStorageBucket = process.env.FIREBASE_STORAGE_BUCKET ?? "partyline-phone-system.firebasestorage.app";
-const firebaseApp = getApps()[0] ?? initializeApp({ storageBucket: firebaseStorageBucket });
+const firebaseProjectId = process.env.FIREBASE_PROJECT_ID ?? "partyline-phone-system";
+const firebaseApp =
+    getApps()[0] ??
+    initializeApp({
+        projectId: firebaseProjectId,
+        storageBucket: firebaseStorageBucket
+    });
 
 export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp);
 export const storage = getStorage(firebaseApp);
 export const appCheck = getAppCheck(firebaseApp);
+
+export type TenantRole = "owner" | "admin" | "member" | "viewer";
 
 export async function checkFirebaseServices(): Promise<Record<string, "ok" | "error">> {
     const checks = await Promise.allSettled([

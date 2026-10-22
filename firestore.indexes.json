@@ -1,4 +1,13 @@
 {
-    "indexes": [],
+    "indexes": [
+        {
+            "collectionGroup": "twilio_events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                { "fieldPath": "type", "order": "ASCENDING" },
+                { "fieldPath": "receivedAt", "order": "DESCENDING" }
+            ]
+        }
+    ],
     "fieldOverrides": []
 }
