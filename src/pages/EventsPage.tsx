@@ -19,7 +19,8 @@ type Filter = "upcoming" | "past" | "all";
 type Status = "active" | "upcoming" | "past";
 
 // todo(backend-connect)
-const SAMPLE_EVENTS: PartyEvent[] = [///example
+const SAMPLE_EVENTS: PartyEvent[] = [
+    ///example
     {
         id: "1",
         title: "Soccer game reservation",

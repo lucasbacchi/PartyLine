@@ -1,131 +1,225 @@
-import { Link } from "react-router";
+// add light/dark mode (complete)
+// add sign in w/phone number button (complete w/recaptcha)
+// stylize buttons (add google icon to sign in w/google button, add spinner to buttons when loading, add hover effects, etc.) (later feature)
+// inspo: PeerSchedule and Firebase landing pages
 
+import {
+    GoogleAuthProvider,
+    onAuthStateChanged,
+    signInWithPopup,
+    signInWithPhoneNumber,
+    RecaptchaVerifier,
+    signOut,
+    type User
+} from "firebase/auth";
+import { useEffect, useRef, useState } from "react";
 
-const STEPS = [
-    {
-        title: "Add your events",
-        text: "Put each rental on the calendar and pick who is covering it."
-    },
-    {
-        title: "Share one number",
-        text: "Renters call or text the same organization number every time."
-    },
-    {
-        title: "The right person answers",
-        text: "PartyLine passes the call to whoever is on duty, then to the backup if they miss it."
-    }
-];
+import type { Route } from "./+types/HomePage";
+import { auth, getFirebaseAppCheckToken } from "../firebase";
+
+export function meta({}: Route.MetaArgs) {
+    return [{ title: "PartyLine" }, { name: "description", content: "Sign in to PartyLine with Google." }];
+}
+export function metaPhone({}: Route.MetaArgs) {
+    return [{ title: "PartyLine" }, { name: "description", content: "Sign in to PartyLine with Phone Number." }];
+}
+
+type Theme = "light" | "dark";
+
+export function useTheme() {
+    const [theme, setTheme] = useState<Theme>(() => {
+        if (typeof window !== "undefined") {
+            const savedTheme = localStorage.getItem("theme") as Theme | null;
+            if (savedTheme) return savedTheme;
+
+            const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            return prefersDark ? "dark" : "light";
+        }
+        return "light";
+    });
+
+    useEffect(() => {
+        const root = document.documentElement;
+        if (theme === "dark") {
+            root.classList.add("dark");
+        } else {
+            root.classList.remove("dark");
+        }
+        localStorage.setItem("theme", theme);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    };
+
+    return { theme, toggleTheme };
+}
+
+export const ThemeToggle: React.FC = () => {
+    const { theme, toggleTheme } = useTheme();
+};
 
 export default function LoginPage() {
+    const [user, setUser] = useState<User | null>(null);
+    const [isSigningIn, setIsSigningIn] = useState(false);
+    const [isTestingBackend, setIsTestingBackend] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [backendStatus, setBackendStatus] = useState<string | null>(null);
+    const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
+
+    useEffect(() => onAuthStateChanged(auth, setUser), []);
+    useEffect(() => () => recaptchaVerifier.current?.clear(), []);
+
+    async function handleGoogleSignIn() {
+        setIsSigningIn(true);
+        setErrorMessage(null);
+
+        try {
+            await signInWithPopup(auth, new GoogleAuthProvider());
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Google.");
+        } finally {
+            setIsSigningIn(false);
+        }
+    }
+    async function handlePhoneSignIn() {
+        setIsSigningIn(true);
+        setErrorMessage(null);
+        function getPhoneNumber() {
+            const phoneNumber = prompt("Enter your phone number (with country code (e.g., +1)):");
+            if (!phoneNumber) {
+                throw new Error("Phone number is required.");
+            }
+            return phoneNumber;
+        }
+        try {
+            recaptchaVerifier.current ??= new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+            const confirmation = await signInWithPhoneNumber(auth, getPhoneNumber(), recaptchaVerifier.current);
+            const verificationCode = prompt("Enter the verification code sent to your phone:");
+            if (!verificationCode) {
+                throw new Error("Verification code is required.");
+            }
+            await confirmation.confirm(verificationCode);
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : "Unable to sign in with Phone Number.");
+        } finally {
+            setIsSigningIn(false);
+        }
+    }
+
+    async function handleSignOut() {
+        setErrorMessage(null);
+
+        try {
+            await signOut(auth);
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : "Unable to sign out.");
+        }
+    }
+
+    async function handleBackendTest() {
+        setIsTestingBackend(true);
+        setErrorMessage(null);
+        setBackendStatus(null);
+
+        try {
+            if (!user) {
+                throw new Error("You must be signed in to test the backend.");
+            }
+
+            const [appCheckToken, idToken] = await Promise.all([getFirebaseAppCheckToken(), user.getIdToken()]);
+            const response = await fetch(
+                `${import.meta.env.VITE_API_URL ?? "http://localhost:8080"}/firebase/protected`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${idToken}`,
+                        "X-Firebase-AppCheck": appCheckToken
+                    }
+                }
+            );
+            const body = (await response.json()) as {
+                error?: string;
+                status?: string;
+                user?: { email?: string | null };
+            };
+
+            if (!response.ok) {
+                throw new Error(body.error ?? "The backend rejected the App Check token.");
+            }
+
+            setBackendStatus(
+                `Backend accepted App Check and Firebase Auth for ${body.user?.email ?? "the signed-in user"}.`
+            );
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : "Unable to test the backend connection.");
+        } finally {
+            setIsTestingBackend(false);
+        }
+    }
+
     return (
-        <div className="min-h-screen bg-[#000000] text-slate-100">
-            {/* top bar */}
-            <header className="sticky top-0 z-30 border-b border-white/5 bg-[#000000]/80 backdrop-blur-sm">
-                <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-                    <span className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-                        <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-500 text-sm font-bold text-white">
-                            P
-                        </span>
-                        PartyLine
-                    </span>
-                    <div className="flex items-center gap-1 sm:gap-2">
-                        <Link
-                            to="/"
-                            className="rounded-full px-4 py-2 text-sm font-medium text-slate-300 hover:text-white"
-                        >
-                            Log in
-                        </Link>
-                        {/* todo: sign up page */}
+        <main className="flex min-h-screen items-center justify-center p-6">
+            <div className="absolute top-4 center-4">
+                <h1 className="text-2xl font-semibold">PartyLine</h1>
+            </div>
+            <section className="flex flex-col items-center">
+                <div>
+                    <h1 className="text-2xl font-semibold text-center justify-center ">Welcome to PartyLine!</h1>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400 text-center justify-center inset">
+                        PartyLine is a flexible phone system management tool that allows for seamless sharing of a
+                        number between multiple parties.
+                    </p>
+                </div>
+
+                {user ? (
+                    <div className="space-y-4">
+                        <p>
+                            Signed in as <strong>{user.displayName ?? user.email}</strong>
+                        </p>
                         <button
                             type="button"
-                            className="rounded-full bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-white"
+                            onClick={handleSignOut}
+                            className="rounded-md bg-gray-900 px-4 py-2 font-medium text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
                         >
-                            Sign up
+                            Sign out
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleBackendTest}
+                            disabled={isTestingBackend}
+                            className="rounded-md border border-blue-600 px-4 py-2 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-950"
+                        >
+                            {isTestingBackend ? "Testing backend..." : "Test Firebase backend"}
                         </button>
                     </div>
-                </nav>
-            </header>
-
-            <main>
-                {/* hero */}
-                <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-12 sm:pt-20 lg:grid-cols-[1.1fr_0.9fr]">
-                    <div>
-                        <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-                            Stop giving out your cell number.
-                        </h1>
-                        <p className="mt-5 max-w-lg text-lg text-slate-400">
-                            Renting out your hall, gym, or field? PartyLine gives your team one shared phone number.
-                            Whoever is on duty for the event picks up, and nobody has to share their personal number.
+                ) : (
+                    <div className="mt-8 w-full max-w-md space-y-6 rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-800">
+                        <p className="mt-2 text-gray-600 dark:text-gray-400">
+                            [TEST] Let's Party! Sign in with Google or Phone Number to access PartyLine's features.
                         </p>
-                        <div className="mt-8 flex flex-wrap items-center gap-4">
-                            {/* todo: sign up page */}
-                            <button
-                                type="button"
-                                className="rounded-full bg-blue-500 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/10 hover:bg-blue-400"
-                            >
-                                Create your account
-                            </button>
-                            <Link
-                                to="/"
-                                className="text-sm font-medium text-slate-300 underline-offset-4 hover:text-white hover:underline"
-                            >
-                                I already have one
-                            </Link>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={handleGoogleSignIn}
+                            disabled={isSigningIn}
+                            className="w-full rounded-md bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60 transition-transform duration-200 ease-in-out hover:scale-105"
+                        >
+                            {isSigningIn ? "Signing in..." : "Sign in with Google"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handlePhoneSignIn}
+                            disabled={isSigningIn}
+                            className="w-full rounded-md bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60 transition-transform duration-200 ease-in-out hover:scale-105"
+                        >
+                            {isSigningIn ? "Signing in..." : "Sign in with Phone Number"}
+                        </button>
+                        <div id="recaptcha-container" />
                     </div>
+                )}
 
-                    {/* little example of a call coming in */}
-                    <div className="relative mx-auto w-full max-w-sm">
-                        <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-blue-500/[0.06] blur-3xl" />
-                        <div className="rounded-3xl border border-white/[0.08] bg-[#04060b] p-5 shadow-2xl">
-                            <p className="text-sm text-slate-400">Saturday, 6:00 PM</p>
-                            <p className="mt-1 text-lg font-semibold">Soccer game reservation</p>
-
-                            <div className="mt-5 rounded-2xl bg-white/[0.04] p-4">
-                                <p className="text-xs text-slate-400">Someone is calling your number</p>
-                                <p className="mt-1 font-medium">Renter · Alex Alban</p>
-                            </div>
-
-                            <div className="ml-5 h-6 w-px bg-white/15" />
-
-                            <div className="flex items-center gap-3 rounded-2xl border border-green-400/30 bg-green-400/10 p-4">
-                                <span className="relative flex h-3 w-3">
-                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60 motion-reduce:animate-none" />
-                                    <span className="relative inline-flex h-3 w-3 rounded-full bg-green-400" />
-                                </span>
-                                <div>
-                                    <p className="text-sm font-medium">Ringing Bjordi</p>
-                                    <p className="text-xs text-slate-400">On duty until 6:00 PM</p>
-                                </div>
-                            </div>
-
-                            <div className="ml-5 h-6 w-px bg-white/15" />
-
-                            <div className="rounded-2xl border border-dashed border-white/15 p-4 text-sm text-slate-400">
-                                No answer? It moves on to <span className="text-slate-200">Asi</span>, the backup.
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* how it works */}
-                <section className="mx-auto max-w-6xl px-5 pb-20">
-                    <h2 className="text-2xl font-semibold tracking-tight">How it works</h2>
-                    <ol className="mt-8 grid gap-8 sm:grid-cols-3">
-                        {STEPS.map((step, i) => (
-                            <li key={step.title} className="border-t border-white/10 pt-5">
-                                <span className="text-sm font-medium text-blue-400">Step {i + 1}</span>
-                                <h3 className="mt-2 text-lg font-semibold">{step.title}</h3>
-                                <p className="mt-1 text-slate-400">{step.text}</p>
-                            </li>
-                        ))}
-                    </ol>
-                </section>
-            </main>
-
-            <footer className="border-t border-white/5 py-8 text-center text-sm text-slate-500">
-                PartyLine Phone System
-            </footer>
-        </div>
+                {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+                {backendStatus && <p className="text-sm text-green-600">{backendStatus}</p>}
+            </section>
+        </main>
     );
 }
