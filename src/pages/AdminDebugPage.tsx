@@ -1,7 +1,9 @@
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import Navbar from "../components/Navbar";
 import { auth, getFirebaseAppCheckToken } from "../firebase";
+import { IconShield, IconPhone } from "../components/Icons";
 
 type ServiceGroup = Record<string, "ok" | "error">;
 type StatusResponse = { status: string; services: { firebase: ServiceGroup; twilio: ServiceGroup } };
@@ -107,136 +109,217 @@ export default function AdminDebugPage() {
         }
     }
 
+    const inputClasses =
+        "mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none";
+
     if (!user)
         return (
-            <main className="mx-auto max-w-3xl p-8">
-                <h1 className="text-3xl font-bold">Admin debug</h1>
-                <p className="mt-4">Sign in first.</p>
-            </main>
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+                <Navbar />
+                <main className="mx-auto max-w-3xl p-8 flex-1 flex flex-col items-center justify-center text-center">
+                    <h1 className="text-3xl font-bold">Admin Debug</h1>
+                    <p className="mt-2 text-slate-400">Please sign in with an administrator account to continue.</p>
+                    <Link
+                        to="/login"
+                        className="mt-4 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition cursor-pointer"
+                    >
+                        Sign in
+                    </Link>
+                </main>
+            </div>
         );
+
     if (!isAdmin)
         return (
-            <main className="mx-auto max-w-3xl p-8">
-                <h1 className="text-3xl font-bold">Admin debug</h1>
-                <p className="mt-4 text-red-600">Administrator access is required.</p>
-            </main>
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+                <Navbar />
+                <main className="mx-auto max-w-3xl p-8 flex-1 flex flex-col items-center justify-center text-center">
+                    <div className="grid h-12 w-12 place-items-center rounded-2xl bg-red-500/10 text-red-400 border border-red-500/20 mb-3">
+                        <IconShield className="h-6 w-6" />
+                    </div>
+                    <h1 className="text-2xl font-bold">Access Restricted</h1>
+                    <p className="mt-2 text-sm text-slate-400">
+                        Global administrator access is required to view low-level system health and Twilio diagnostic
+                        tools.
+                    </p>
+                    <Link
+                        to="/events"
+                        className="mt-4 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition cursor-pointer"
+                    >
+                        Back to Events
+                    </Link>
+                </main>
+            </div>
         );
 
     return (
-        <main className="mx-auto max-w-3xl space-y-8 p-8">
-            <div>
-                <Link to="/" className="text-blue-600 hover:underline">
-                    Back to PartyLine
-                </Link>
-                <h1 className="mt-4 text-3xl font-bold">System debug</h1>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Admin-only health checks and Twilio test tools.</p>
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+            <Navbar />
+
+            {/* Header */}
+            <div className="border-b border-slate-800 bg-slate-900/40">
+                <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                        <IconShield className="h-4 w-4" />
+                        <span>System Diagnostics</span>
+                    </div>
+                    <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-white">System Debug</h1>
+                    <p className="mt-1 text-sm text-slate-400">
+                        Live Firebase services status and direct Twilio telephony test suite.
+                    </p>
+                </div>
             </div>
-            <section className="rounded-xl border border-gray-200 p-6 dark:border-gray-800">
-                <h2 className="text-xl font-semibold">Service status</h2>
-                <button
-                    type="button"
-                    onClick={loadStatus}
-                    disabled={isBusy}
-                    className="mt-4 rounded-md bg-gray-900 px-4 py-2 text-white disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900"
-                >
-                    Refresh status
-                </button>
-                {status && (
-                    <div className="mt-4 space-y-2">
-                        <p className="font-medium">Overall: {status.status}</p>
-                        {Object.entries(status.services).map(([group, services]) => (
-                            <div key={group}>
-                                <strong className="capitalize">{group}</strong>:{" "}
-                                {Object.entries(services).map(([name, value]) => (
-                                    <span className="ml-3" key={name}>
-                                        {name}{" "}
-                                        <span className={value === "ok" ? "text-green-600" : "text-red-600"}>
-                                            {value}
-                                        </span>
-                                    </span>
+
+            <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 space-y-8">
+                {/* Status section */}
+                <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-semibold text-white">Service Health Status</h2>
+                        <button
+                            type="button"
+                            onClick={loadStatus}
+                            disabled={isBusy}
+                            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60 transition cursor-pointer shadow"
+                        >
+                            {isBusy ? "Checking..." : "Refresh Status"}
+                        </button>
+                    </div>
+
+                    {status && (
+                        <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-400">Overall System:</span>
+                                <span
+                                    className={`rounded px-2 py-0.5 text-xs font-semibold uppercase ${
+                                        status.status === "ok"
+                                            ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                            : "bg-red-500/15 text-red-300 border border-red-500/30"
+                                    }`}
+                                >
+                                    {status.status}
+                                </span>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-slate-800">
+                                {Object.entries(status.services).map(([group, services]) => (
+                                    <div key={group} className="rounded-lg bg-slate-900 p-3 border border-slate-800/80">
+                                        <p className="text-xs font-bold uppercase text-slate-300 mb-2">{group}</p>
+                                        <div className="space-y-1">
+                                            {Object.entries(services).map(([name, value]) => (
+                                                <div key={name} className="flex justify-between text-xs">
+                                                    <span className="text-slate-400">{name}</span>
+                                                    <span
+                                                        className={
+                                                            value === "ok"
+                                                                ? "font-semibold text-green-400"
+                                                                : "font-semibold text-red-400"
+                                                        }
+                                                    >
+                                                        {value}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
-                        ))}
+                        </div>
+                    )}
+                </section>
+
+                {/* Twilio Telephony Test Section */}
+                <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl space-y-4">
+                    <div className="flex items-center gap-2 text-white font-semibold">
+                        <IconPhone className="h-5 w-5 text-blue-400" />
+                        <h2>Twilio Telephony Diagnostics</h2>
                     </div>
-                )}
-            </section>
-            <section className="rounded-xl border border-gray-200 p-6 dark:border-gray-800">
-                <h2 className="text-xl font-semibold">Twilio test messages</h2>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <label className="text-gray-800 dark:text-gray-200">
-                        To
-                        <input
-                            className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400"
-                            placeholder="+15551234567"
-                            value={form.to}
-                            onChange={(event) => setForm({ ...form, to: event.target.value })}
-                        />
-                    </label>
-                    <label className="text-gray-800 dark:text-gray-200">
-                        From (Twilio number)
-                        <input
-                            className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400"
-                            placeholder="+15557654321"
-                            value={form.from}
-                            onChange={(event) => setForm({ ...form, from: event.target.value })}
-                        />
-                    </label>
-                    <label className="text-gray-800 dark:text-gray-200">
-                        SMS body
-                        <textarea
-                            className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400"
-                            rows={3}
-                            value={form.body}
-                            onChange={(event) => setForm({ ...form, body: event.target.value })}
-                        />
-                    </label>
-                    <label className="text-gray-800 dark:text-gray-200">
-                        Call message
-                        <textarea
-                            className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 placeholder:text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400"
-                            rows={3}
-                            value={form.message}
-                            onChange={(event) => setForm({ ...form, message: event.target.value })}
-                        />
-                    </label>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                        type="button"
-                        onClick={() => sendTest("/admin/twilio/sms")}
-                        disabled={isBusy}
-                        className="rounded-md bg-purple-600 px-4 py-2 text-white disabled:opacity-60"
-                    >
-                        Send SMS
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => sendTest("/admin/twilio/call")}
-                        disabled={isBusy}
-                        className="rounded-md bg-purple-600 px-4 py-2 text-white disabled:opacity-60"
-                    >
-                        Place call
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => loadLatestEvent("sms")}
-                        disabled={isBusy}
-                        className="rounded-md border border-purple-500 px-4 py-2 text-purple-700 hover:bg-purple-50 disabled:opacity-60 dark:text-purple-300 dark:hover:bg-purple-950"
-                    >
-                        Last received SMS
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => loadLatestEvent("call")}
-                        disabled={isBusy}
-                        className="rounded-md border border-purple-500 px-4 py-2 text-purple-700 hover:bg-purple-50 disabled:opacity-60 dark:text-purple-300 dark:hover:bg-purple-950"
-                    >
-                        Last received call
-                    </button>
-                </div>
-                {result && <p className="mt-4 text-green-600">{result}</p>}
-                {error && <p className="mt-4 text-red-600">{error}</p>}
-            </section>
-        </main>
+
+                    <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                        <label className="block text-xs font-medium text-slate-300">
+                            Destination Phone (To)
+                            <input
+                                className={inputClasses}
+                                placeholder="+15551234567"
+                                value={form.to}
+                                onChange={(event) => setForm({ ...form, to: event.target.value })}
+                            />
+                        </label>
+                        <label className="block text-xs font-medium text-slate-300">
+                            Twilio Number (From)
+                            <input
+                                className={inputClasses}
+                                placeholder="+15557654321"
+                                value={form.from}
+                                onChange={(event) => setForm({ ...form, from: event.target.value })}
+                            />
+                        </label>
+                        <label className="block text-xs font-medium text-slate-300">
+                            SMS Message Body
+                            <textarea
+                                className={inputClasses}
+                                rows={2}
+                                value={form.body}
+                                onChange={(event) => setForm({ ...form, body: event.target.value })}
+                            />
+                        </label>
+                        <label className="block text-xs font-medium text-slate-300">
+                            Voice Call Message (Text-to-Speech)
+                            <textarea
+                                className={inputClasses}
+                                rows={2}
+                                value={form.message}
+                                onChange={(event) => setForm({ ...form, message: event.target.value })}
+                            />
+                        </label>
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap gap-2.5">
+                        <button
+                            type="button"
+                            onClick={() => sendTest("/admin/twilio/sms")}
+                            disabled={isBusy}
+                            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition cursor-pointer shadow"
+                        >
+                            Send SMS Test
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => sendTest("/admin/twilio/call")}
+                            disabled={isBusy}
+                            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition cursor-pointer shadow"
+                        >
+                            Place Voice Call Test
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => loadLatestEvent("sms")}
+                            disabled={isBusy}
+                            className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50 transition cursor-pointer"
+                        >
+                            Inspect Latest Inbound SMS
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => loadLatestEvent("call")}
+                            disabled={isBusy}
+                            className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50 transition cursor-pointer"
+                        >
+                            Inspect Latest Inbound Call
+                        </button>
+                    </div>
+
+                    {result && (
+                        <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-xs text-green-300">
+                            {result}
+                        </div>
+                    )}
+                    {error && (
+                        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+                            {error}
+                        </div>
+                    )}
+                </section>
+            </main>
+        </div>
     );
 }

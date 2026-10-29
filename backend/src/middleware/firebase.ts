@@ -5,6 +5,9 @@ export async function requireAppCheck(req: Request, res: Response, next: NextFun
     const token = req.header("X-Firebase-AppCheck");
 
     if (!token) {
+        // if (process.env.NODE_ENV !== "production" || process.env.SKIP_APP_CHECK === "true") {
+        //     return next();
+        // }
         res.status(401).json({ error: "Missing Firebase App Check token" });
         return;
     }
@@ -13,6 +16,10 @@ export async function requireAppCheck(req: Request, res: Response, next: NextFun
         res.locals.appCheck = await appCheck.verifyToken(token);
         next();
     } catch (error) {
+        // if (process.env.NODE_ENV !== "production" || process.env.SKIP_APP_CHECK === "true") {
+        //     console.warn("Bypassing invalid App Check in development mode", error);
+        //     return next();
+        // }
         console.warn("Firebase App Check verification failed", error);
         res.status(401).json({ error: "Invalid Firebase App Check token" });
     }

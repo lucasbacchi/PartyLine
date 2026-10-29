@@ -11,6 +11,13 @@ import {
     getTwilioWebhookAuthToken,
     validateTwilioPhoneNumber
 } from "./twilio.js";
+import usersRouter from "./routes/users.js";
+import tenantsRouter from "./routes/tenants.js";
+import membersRouter from "./routes/members.js";
+import phoneNumbersRouter from "./routes/phoneNumbers.js";
+import eventsRouter from "./routes/events.js";
+import invitesRouter from "./routes/invites.js";
+import joinRouter from "./routes/join.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 8080);
@@ -210,6 +217,30 @@ protectedApi.get("/protected", (_req: Request, res: Response) => {
     });
 });
 app.use("/firebase", protectedApi);
+
+// Authenticated API routes for tenants, users, members, phone numbers, events, and invites
+const authenticatedMiddleware = [requireAppCheck, requireFirebaseAuth, authenticatedRateLimit];
+
+// API prefix routes
+const apiRouter = express.Router();
+apiRouter.use(authenticatedMiddleware);
+apiRouter.use("/users", usersRouter);
+apiRouter.use("/tenants/:tenantId/members", membersRouter);
+apiRouter.use("/tenants/:tenantId/phone-numbers", phoneNumbersRouter);
+apiRouter.use("/tenants/:tenantId/events", eventsRouter);
+apiRouter.use("/tenants/:tenantId/invites", invitesRouter);
+apiRouter.use("/tenants", tenantsRouter);
+apiRouter.use("/invites", joinRouter);
+app.use("/api", apiRouter);
+
+// Root direct mounts for convenience
+app.use("/users", authenticatedMiddleware, usersRouter);
+app.use("/tenants/:tenantId/members", authenticatedMiddleware, membersRouter);
+app.use("/tenants/:tenantId/phone-numbers", authenticatedMiddleware, phoneNumbersRouter);
+app.use("/tenants/:tenantId/events", authenticatedMiddleware, eventsRouter);
+app.use("/tenants/:tenantId/invites", authenticatedMiddleware, invitesRouter);
+app.use("/tenants", authenticatedMiddleware, tenantsRouter);
+app.use("/invites", authenticatedMiddleware, joinRouter);
 
 const adminApi = express.Router();
 adminApi.use(requireAppCheck);

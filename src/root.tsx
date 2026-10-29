@@ -2,6 +2,8 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { UserProvider } from "./context/UserContext";
+import { AppProvider } from "./context/AppContext";
 
 export const links: Route.LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -35,7 +37,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-    return <Outlet />;
+    return (
+        <UserProvider>
+            <AppProvider>
+                <Outlet />
+            </AppProvider>
+        </UserProvider>
+    );
+}
+
+export function HydrateFallback() {
+    return (
+        <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+            <div className="flex flex-col items-center gap-4">
+                <div className="relative flex items-center justify-center">
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-linear-to-tr from-blue-600 to-indigo-500 text-xl font-black text-white shadow-lg shadow-blue-500/25 animate-pulse">
+                        P
+                    </span>
+                    <div className="absolute -inset-2 rounded-2xl border-2 border-indigo-500/30 animate-spin" />
+                </div>
+                <div className="text-center">
+                    <p className="text-sm font-medium text-slate-300">Loading PartyLine...</p>
+                    <p className="text-xs text-slate-500">Preparing your shared phone workspace</p>
+                </div>
+            </div>
+        </main>
+    );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -52,14 +79,16 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     }
 
     return (
-        <main className="pt-16 p-4 container mx-auto">
-            <h1>{message}</h1>
-            <p>{details}</p>
-            {stack && (
-                <pre className="w-full p-4 overflow-x-auto">
-                    <code>{stack}</code>
-                </pre>
-            )}
+        <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center">
+            <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
+                <h1 className="text-2xl font-bold text-white">{message}</h1>
+                <p className="mt-2 text-sm text-slate-400">{details}</p>
+                {stack && (
+                    <pre className="mt-4 w-full p-4 overflow-x-auto text-left text-xs bg-slate-950 rounded-xl border border-slate-800 text-red-400 font-mono">
+                        <code>{stack}</code>
+                    </pre>
+                )}
+            </div>
         </main>
     );
 }
