@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import { useApp, type TenantRole, type OrgMember } from "../context/AppContext";
 import {
     IconBuilding,
@@ -759,6 +760,8 @@ export default function OrgUsersPage() {
                     </div>
                 </div>
             )}
+
+            <Footer />
 
             {/* Toast Feedback */}
             {toastMessage && (

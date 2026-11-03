@@ -83,7 +83,12 @@ type AppContextType = {
     isLoadingTenants: boolean;
     isLoadingMembers: boolean;
     switchTenant: (tenantId: string) => void;
-    createOrganization: (name: string, initialPhone?: string) => Promise<string>;
+    createOrganization: (
+        name: string,
+        initialPhone?: string,
+        initialSettings?: Partial<OrgSettings>,
+        initialMembers?: Array<{ email: string; displayName?: string; phoneNumber?: string; role?: TenantRole }>
+    ) => Promise<string>;
     updateOrgSettings: (newSettings: Partial<OrgSettings>) => Promise<void>;
     addPhoneNumber: (phone: { number: string; label: string; isPrimary?: boolean }) => Promise<void>;
     removePhoneNumber: (id: string) => Promise<void>;
@@ -335,7 +340,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     // 6. Create new organization in Firestore
-    const createOrganization = async (name: string, initialPhone?: string): Promise<string> => {
+    const createOrganization = async (
+        name: string,
+        initialPhone?: string,
+        initialSettings?: Partial<OrgSettings>,
+        initialMembers?: Array<{ email: string; displayName?: string; phoneNumber?: string; role?: TenantRole }>
+    ): Promise<string> => {
         if (!user) throw new Error("Must be signed in to create an organization.");
 
         const cleanName = name.trim().slice(0, 100);
@@ -353,7 +363,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             phoneNumbersList.push({
                 id: `pn-${Date.now()}`,
                 number: initialPhone.trim(),
-                label: "Main Rental Line",
+                label: "Main Organization Line",
                 isPrimary: true
             });
         }
@@ -369,7 +379,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ownerUid: user.uid,
             inviteCode: masterInviteCode,
             phoneNumbers: phoneNumbersList,
-            settings: { ...DEFAULT_SETTINGS },
+            settings: { ...DEFAULT_SETTINGS, ...initialSettings },
             createdAt: now,
             updatedAt: now
         });
@@ -407,6 +417,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             createdAt: now,
             status: "active"
         });
+
+        // E. Add initial members if specified during onboarding
+        if (Array.isArray(initialMembers) && initialMembers.length > 0) {
+            initialMembers.forEach((m, idx) => {
+                if (m.email?.trim()) {
+                    const tempMemberUid = `mem-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`;
+                    const memRef = doc(db, "tenants", tenantId, "members", tempMemberUid);
+                    batch.set(memRef, {
+                        uid: tempMemberUid,
+                        displayName: m.displayName?.trim() || m.email.split("@")[0],
+                        email: m.email.trim(),
+                        phoneNumber: m.phoneNumber?.trim() || "",
+                        role: m.role || "member",
+                        active: true,
+                        joinedAt: now,
+                        updatedAt: now
+                    });
+                }
+            });
+        }
 
         await batch.commit();
 

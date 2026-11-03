@@ -2,6 +2,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import { auth, getFirebaseAppCheckToken } from "../firebase";
 import { IconShield, IconPhone } from "../components/Icons";
 
@@ -126,12 +127,13 @@ export default function AdminDebugPage() {
                         Sign in
                     </Link>
                 </main>
+                <Footer />
             </div>
         );
 
     if (!isAdmin)
         return (
-            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
                 <Navbar />
                 <main className="mx-auto max-w-3xl p-8 flex-1 flex flex-col items-center justify-center text-center">
                     <div className="grid h-12 w-12 place-items-center rounded-2xl bg-red-500/10 text-red-400 border border-red-500/20 mb-3">
@@ -149,11 +151,12 @@ export default function AdminDebugPage() {
                         Back to Events
                     </Link>
                 </main>
+                <Footer />
             </div>
         );
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
             <Navbar />
 
             {/* Header */}
@@ -320,6 +323,7 @@ export default function AdminDebugPage() {
                     )}
                 </section>
             </main>
+            <Footer />
         </div>
     );
 }

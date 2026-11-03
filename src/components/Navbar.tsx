@@ -77,166 +77,178 @@ export default function Navbar() {
                     </Link>
 
                     {/* Desktop Navigation */}
-                    <nav className="hidden items-center gap-1 md:flex">
-                        <Link to="/events" className={linkClasses("/events")}>
-                            <IconCalendar className="h-4 w-4" />
-                            Events
-                        </Link>
-                        <Link to="/org/users" className={linkClasses("/org/users")}>
-                            <IconUsers className="h-4 w-4" />
-                            Team Members
-                        </Link>
-                        <Link to="/org/settings" className={linkClasses("/org/settings")}>
-                            <IconCog className="h-4 w-4" />
-                            Org Settings
-                        </Link>
-                    </nav>
+                    {user && (
+                        <nav className="hidden items-center gap-1 md:flex">
+                            <Link to="/events" className={linkClasses("/events")}>
+                                <IconCalendar className="h-4 w-4" />
+                                Events
+                            </Link>
+                            <Link to="/org/users" className={linkClasses("/org/users")}>
+                                <IconUsers className="h-4 w-4" />
+                                Team Members
+                            </Link>
+                            <Link to="/org/settings" className={linkClasses("/org/settings")}>
+                                <IconCog className="h-4 w-4" />
+                                Org Settings
+                            </Link>
+                        </nav>
+                    )}
                 </div>
 
-                {/* Right controls: Org Switcher & User Menu */}
-                <div className="flex items-center gap-3">
-                    {/* Org Switcher */}
-                    {currentTenant ? (
-                        <div className="relative" ref={orgMenuRef}>
+                {/* Right controls: Org Switcher & User Menu or Auth Buttons */}
+                {user ? (
+                    <div className="flex items-center gap-3">
+                        {/* Org Switcher */}
+                        {currentTenant ? (
+                            <div className="relative" ref={orgMenuRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOrgMenuOpen((prev) => !prev)}
+                                    className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-200 transition hover:border-slate-700 hover:bg-slate-800"
+                                >
+                                    <IconBuilding className="h-4 w-4 text-blue-400" />
+                                    <span className="max-w-30 truncate sm:max-w-40">{currentTenant.name}</span>
+                                    <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-300">
+                                        {currentTenant.userRole}
+                                    </span>
+                                    <svg
+                                        className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isOrgMenuOpen ? "rotate-180" : ""}`}
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M19 9l-7 7-7-7"
+                                        />
+                                    </svg>
+                                </button>
+
+                                {/* Org Switcher Dropdown */}
+                                {isOrgMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-64 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-2xl ring-1 ring-black/50 z-50">
+                                        <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                                            Switch Organization
+                                        </p>
+                                        <div className="space-y-1">
+                                            {tenants.map((t) => (
+                                                <button
+                                                    key={t.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        switchTenant(t.id);
+                                                        setIsOrgMenuOpen(false);
+                                                    }}
+                                                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
+                                                        t.id === currentTenant.id
+                                                            ? "bg-blue-600/20 text-blue-300 font-medium"
+                                                            : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{t.name}</span>
+                                                    <span className="text-[10px] uppercase text-slate-500">
+                                                        {t.role}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="mt-2 border-t border-slate-800 pt-2">
+                                            <Link
+                                                to="/org/new"
+                                                onClick={() => setIsOrgMenuOpen(false)}
+                                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-blue-400 hover:bg-blue-600/10 font-medium"
+                                            >
+                                                <IconPlus className="h-3.5 w-3.5" />
+                                                New Organization Setup
+                                            </Link>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <Link
+                                to="/org/new"
+                                className="flex items-center gap-1.5 rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-white transition"
+                            >
+                                <IconPlus className="h-3.5 w-3.5 text-blue-400" />
+                                <span>Create or Join Org</span>
+                            </Link>
+                        )}
+
+                        {/* User profile dropdown */}
+                        <div className="relative" ref={userMenuRef}>
                             <button
                                 type="button"
-                                onClick={() => setIsOrgMenuOpen((prev) => !prev)}
-                                className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-200 transition hover:border-slate-700 hover:bg-slate-800"
+                                onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                                className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 p-1 text-slate-200 transition hover:border-slate-500 hover:ring-2 hover:ring-blue-500/30"
+                                title={displayName}
                             >
-                                <IconBuilding className="h-4 w-4 text-blue-400" />
-                                <span className="max-w-30 truncate sm:max-w-40">{currentTenant.name}</span>
-                                <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-300">
-                                    {currentTenant.userRole}
+                                <span className="grid h-7 w-7 place-items-center rounded-full bg-linear-to-tr from-blue-600 to-indigo-500 text-xs font-bold text-white shadow-sm">
+                                    {initials}
                                 </span>
-                                <svg
-                                    className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isOrgMenuOpen ? "rotate-180" : ""}`}
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M19 9l-7 7-7-7"
-                                    />
-                                </svg>
                             </button>
 
-                            {/* Org Switcher Dropdown */}
-                            {isOrgMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-64 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-2xl ring-1 ring-black/50 z-50">
-                                    <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                                        Switch Organization
-                                    </p>
-                                    <div className="space-y-1">
-                                        {tenants.map((t) => (
-                                            <button
-                                                key={t.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    switchTenant(t.id);
-                                                    setIsOrgMenuOpen(false);
-                                                }}
-                                                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
-                                                    t.id === currentTenant.id
-                                                        ? "bg-blue-600/20 text-blue-300 font-medium"
-                                                        : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                                                }`}
-                                            >
-                                                <span className="truncate">{t.name}</span>
-                                                <span className="text-[10px] uppercase text-slate-500">{t.role}</span>
-                                            </button>
-                                        ))}
+                            {isUserMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-2xl ring-1 ring-black/50 z-50">
+                                    <div className="border-b border-slate-800 px-3 py-2">
+                                        <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                                        <p className="text-xs text-slate-400 truncate">
+                                            {user?.email || userProfile.email}
+                                        </p>
                                     </div>
-                                    <div className="mt-2 border-t border-slate-800 pt-2">
+                                    <div className="py-1">
                                         <Link
                                             to="/account"
-                                            onClick={() => setIsOrgMenuOpen(false)}
-                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-blue-400 hover:bg-blue-600/10"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
                                         >
-                                            <IconPlus className="h-3.5 w-3.5" />
-                                            Join or Create Organization
+                                            <IconUser className="h-4 w-4 text-slate-400" />
+                                            Account Settings
+                                        </Link>
+                                        <Link
+                                            to="/org/new"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
+                                        >
+                                            <IconBuilding className="h-4 w-4 text-blue-400" />
+                                            New Organization Setup
+                                        </Link>
+                                        <Link
+                                            to="/org/users"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white md:hidden"
+                                        >
+                                            <IconUsers className="h-4 w-4 text-slate-400" />
+                                            Team Members
+                                        </Link>
+                                        <Link
+                                            to="/org/settings"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white md:hidden"
+                                        >
+                                            <IconCog className="h-4 w-4 text-slate-400" />
+                                            Org Settings
+                                        </Link>
+                                        <Link
+                                            to="/events"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white md:hidden"
+                                        >
+                                            <IconCalendar className="h-4 w-4 text-slate-400" />
+                                            Events Schedule
+                                        </Link>
+                                        <Link
+                                            to="/admin/debug"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
+                                        >
+                                            <IconPhone className="h-4 w-4 text-slate-400" />
+                                            System Debug
                                         </Link>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    ) : user ? (
-                        <Link
-                            to="/account"
-                            className="flex items-center gap-1.5 rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-white transition"
-                        >
-                            <IconPlus className="h-3.5 w-3.5 text-blue-400" />
-                            <span>Create or Join Org</span>
-                        </Link>
-                    ) : null}
-
-                    {/* User profile dropdown / Login link */}
-                    <div className="relative" ref={userMenuRef}>
-                        <button
-                            type="button"
-                            onClick={() => setIsUserMenuOpen((prev) => !prev)}
-                            className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 p-1 text-slate-200 transition hover:border-slate-500 hover:ring-2 hover:ring-blue-500/30"
-                            title={displayName}
-                        >
-                            <span className="grid h-7 w-7 place-items-center rounded-full bg-linear-to-tr from-slate-700 to-slate-600 text-xs font-bold text-white">
-                                {initials}
-                            </span>
-                        </button>
-
-                        {isUserMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-2xl ring-1 ring-black/50 z-50">
-                                <div className="border-b border-slate-800 px-3 py-2">
-                                    <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-                                    <p className="text-xs text-slate-400 truncate">
-                                        {user?.email || userProfile.email}
-                                    </p>
-                                </div>
-                                <div className="py-1">
-                                    <Link
-                                        to="/account"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
-                                    >
-                                        <IconUser className="h-4 w-4 text-slate-400" />
-                                        Account Settings
-                                    </Link>
-                                    <Link
-                                        to="/org/users"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white md:hidden"
-                                    >
-                                        <IconUsers className="h-4 w-4 text-slate-400" />
-                                        Team Members
-                                    </Link>
-                                    <Link
-                                        to="/org/settings"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white md:hidden"
-                                    >
-                                        <IconCog className="h-4 w-4 text-slate-400" />
-                                        Org Settings
-                                    </Link>
-                                    <Link
-                                        to="/events"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white md:hidden"
-                                    >
-                                        <IconCalendar className="h-4 w-4 text-slate-400" />
-                                        Events Schedule
-                                    </Link>
-                                    <Link
-                                        to="/admin/debug"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
-                                    >
-                                        <IconPhone className="h-4 w-4 text-slate-400" />
-                                        System Debug
-                                    </Link>
-                                </div>
-                                <div className="border-t border-slate-800 pt-1">
-                                    {user ? (
+                                    <div className="border-t border-slate-800 pt-1">
                                         <button
                                             type="button"
                                             onClick={handleSignOut}
@@ -244,41 +256,50 @@ export default function Navbar() {
                                         >
                                             Sign out
                                         </button>
-                                    ) : (
-                                        <Link
-                                            to="/login"
-                                            onClick={() => setIsUserMenuOpen(false)}
-                                            className="block w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-blue-400 hover:bg-blue-500/10"
-                                        >
-                                            Sign in
-                                        </Link>
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="flex items-center gap-2">
+                        <Link
+                            to="/login"
+                            className="rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition"
+                        >
+                            Log in
+                        </Link>
+                        <Link
+                            to="/signup"
+                            className="rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm shadow-blue-600/30 hover:bg-blue-500 transition"
+                        >
+                            Sign up
+                        </Link>
+                    </div>
+                )}
             </div>
 
             {/* Mobile Navigation bar */}
-            <div className="flex border-t border-slate-800/80 px-4 py-2 md:hidden justify-around bg-slate-950">
-                <Link to="/events" className={linkClasses("/events")}>
-                    <IconCalendar className="h-4 w-4" />
-                    <span className="text-xs">Events</span>
-                </Link>
-                <Link to="/org/users" className={linkClasses("/org/users")}>
-                    <IconUsers className="h-4 w-4" />
-                    <span className="text-xs">Team</span>
-                </Link>
-                <Link to="/org/settings" className={linkClasses("/org/settings")}>
-                    <IconCog className="h-4 w-4" />
-                    <span className="text-xs">Settings</span>
-                </Link>
-                <Link to="/account" className={linkClasses("/account")}>
-                    <IconUser className="h-4 w-4" />
-                    <span className="text-xs">Account</span>
-                </Link>
-            </div>
+            {user && (
+                <div className="flex border-t border-slate-800/80 px-4 py-2 md:hidden justify-around bg-slate-950">
+                    <Link to="/events" className={linkClasses("/events")}>
+                        <IconCalendar className="h-4 w-4" />
+                        <span className="text-xs">Events</span>
+                    </Link>
+                    <Link to="/org/users" className={linkClasses("/org/users")}>
+                        <IconUsers className="h-4 w-4" />
+                        <span className="text-xs">Team</span>
+                    </Link>
+                    <Link to="/org/settings" className={linkClasses("/org/settings")}>
+                        <IconCog className="h-4 w-4" />
+                        <span className="text-xs">Settings</span>
+                    </Link>
+                    <Link to="/account" className={linkClasses("/account")}>
+                        <IconUser className="h-4 w-4" />
+                        <span className="text-xs">Account</span>
+                    </Link>
+                </div>
+            )}
         </header>
     );
 }

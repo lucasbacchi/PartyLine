@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import { useApp, type TenantRole } from "../context/AppContext";
 import {
     IconBuilding,
@@ -338,14 +340,13 @@ export default function AccountPage() {
                                     <IconBuilding className="h-5 w-5 text-blue-400" />
                                     <h2>My Organizations ({tenants.length})</h2>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsCreateModalOpen(true)}
+                                <Link
+                                    to="/org/new"
                                     className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition"
                                 >
-                                    <IconPlus className="h-3.5 w-3.5" />
-                                    New Org
-                                </button>
+                                    <IconPlus className="h-3.5 w-3.5 text-blue-400" />
+                                    New Org Setup
+                                </Link>
                             </div>
 
                             <div className="mt-4 space-y-3">
@@ -571,6 +572,8 @@ export default function AccountPage() {
                     </div>
                 </div>
             )}
+
+            <Footer />
 
             {/* Toast Feedback */}
             {toastMessage && (

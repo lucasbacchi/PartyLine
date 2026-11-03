@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, type SyntheticEvent } from "react";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import { useApp } from "../context/AppContext";
 import { db } from "../firebase";
 import { collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
@@ -302,6 +303,7 @@ export default function EventsPage() {
                     />
                 )}
             </main>
+            <Footer />
         </div>
     );
 }

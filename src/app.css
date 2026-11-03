@@ -9,6 +9,10 @@
 @layer base {
     html {
         color-scheme: dark;
+        /* Lock vertical scrollbar gutter so page layout never shifts between short and long pages */
+        scrollbar-gutter: stable;
+        overflow-y: scroll;
+        scrollbar-color: #1e293b #020617;
     }
 
     body {

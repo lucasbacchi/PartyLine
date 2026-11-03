@@ -18,6 +18,7 @@ import phoneNumbersRouter from "./routes/phoneNumbers.js";
 import eventsRouter from "./routes/events.js";
 import invitesRouter from "./routes/invites.js";
 import joinRouter from "./routes/join.js";
+import twilioNumbersRouter from "./routes/twilioNumbers.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 8080);
@@ -231,6 +232,7 @@ apiRouter.use("/tenants/:tenantId/events", eventsRouter);
 apiRouter.use("/tenants/:tenantId/invites", invitesRouter);
 apiRouter.use("/tenants", tenantsRouter);
 apiRouter.use("/invites", joinRouter);
+apiRouter.use("/twilio", twilioNumbersRouter);
 app.use("/api", apiRouter);
 
 // Root direct mounts for convenience
@@ -241,6 +243,7 @@ app.use("/tenants/:tenantId/events", authenticatedMiddleware, eventsRouter);
 app.use("/tenants/:tenantId/invites", authenticatedMiddleware, invitesRouter);
 app.use("/tenants", authenticatedMiddleware, tenantsRouter);
 app.use("/invites", authenticatedMiddleware, joinRouter);
+app.use("/twilio", authenticatedMiddleware, twilioNumbersRouter);
 
 const adminApi = express.Router();
 adminApi.use(requireAppCheck);

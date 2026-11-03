@@ -7,6 +7,7 @@ export default [
     route("events", "pages/EventsPage.tsx"),
     route("org/users", "pages/OrgUsersPage.tsx"),
     route("org/settings", "pages/OrgSettingsPage.tsx"),
+    route("org/new", "pages/OrgOnboardingPage.tsx"),
     route("account", "pages/AccountPage.tsx"),
     route("admin/debug", "pages/AdminDebugPage.tsx"),
     route("*?", "pages/404Page.tsx")

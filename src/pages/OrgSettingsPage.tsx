@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import { useApp, type OrgSettings } from "../context/AppContext";
 import {
     IconBuilding,
@@ -609,6 +610,8 @@ export default function OrgSettingsPage() {
                     </form>
                 </div>
             )}
+
+            <Footer />
 
             {/* Toast Feedback */}
             {toastMessage && (
