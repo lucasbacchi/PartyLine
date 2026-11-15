@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
-import { IconBuilding, IconCog, IconPhone, IconPlus, IconUsers, IconCalendar, IconUser } from "./Icons";
+import { IconBell, IconBuilding, IconCog, IconPhone, IconPlus, IconUsers, IconCalendar, IconUser } from "./Icons";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 
@@ -40,6 +40,8 @@ export default function Navbar() {
 
     const isActive = (path: string) => {
         if (path === "/events" && location.pathname === "/events") return true;
+        if (path === "/calls" && location.pathname.startsWith("/calls")) return true;
+        if (path === "/texts" && location.pathname.startsWith("/texts")) return true;
         if (path === "/org/users" && location.pathname.startsWith("/org/users")) return true;
         if (path === "/org/settings" && location.pathname.startsWith("/org/settings")) return true;
         if (path === "/account" && location.pathname.startsWith("/account")) return true;
@@ -82,6 +84,14 @@ export default function Navbar() {
                             <Link to="/events" className={linkClasses("/events")}>
                                 <IconCalendar className="h-4 w-4" />
                                 Events
+                            </Link>
+                            <Link to="/calls" className={linkClasses("/calls")}>
+                                <IconPhone className="h-4 w-4" />
+                                Call History
+                            </Link>
+                            <Link to="/texts" className={linkClasses("/texts")}>
+                                <IconBell className="h-4 w-4" />
+                                SMS Inbox
                             </Link>
                             <Link to="/org/users" className={linkClasses("/org/users")}>
                                 <IconUsers className="h-4 w-4" />
@@ -285,6 +295,14 @@ export default function Navbar() {
                     <Link to="/events" className={linkClasses("/events")}>
                         <IconCalendar className="h-4 w-4" />
                         <span className="text-xs">Events</span>
+                    </Link>
+                    <Link to="/calls" className={linkClasses("/calls")}>
+                        <IconPhone className="h-4 w-4" />
+                        <span className="text-xs">Calls</span>
+                    </Link>
+                    <Link to="/texts" className={linkClasses("/texts")}>
+                        <IconBell className="h-4 w-4" />
+                        <span className="text-xs">SMS</span>
                     </Link>
                     <Link to="/org/users" className={linkClasses("/org/users")}>
                         <IconUsers className="h-4 w-4" />

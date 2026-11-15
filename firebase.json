@@ -41,7 +41,11 @@
             "emailPassword": true,
             "googleSignIn": {
                 "oAuthBrandDisplayName": "PartyLine Phone System",
-                "supportEmail": "lucasbacchi22@gmail.com"
+                "supportEmail": "lucasbacchi22@gmail.com",
+                "authorizedRedirectUris": [
+                    "https://partyline-phone-system.firebaseapp.com/__/auth/handler",
+                    "http://localhost"
+                ]
             }
         }
     }

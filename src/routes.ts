@@ -5,6 +5,8 @@ export default [
     route("login", "pages/LoginPage.tsx"),
     route("signup", "pages/SignupPage.tsx"),
     route("events", "pages/EventsPage.tsx"),
+    route("calls", "pages/CallHistoryPage.tsx"),
+    route("texts", "pages/SMSInboxPage.tsx"),
     route("org/users", "pages/OrgUsersPage.tsx"),
     route("org/settings", "pages/OrgSettingsPage.tsx"),
     route("org/new", "pages/OrgOnboardingPage.tsx"),
