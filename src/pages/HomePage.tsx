@@ -4,6 +4,16 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { IconShield, IconLock, IconPhone, IconCheckCircle } from "../components/Icons";
 
+export function meta() {
+    return [
+        { title: "PartyLine | Smart Shared Phone Lines & Event Routing" },
+        {
+            name: "description",
+            content: "Share one business phone number across your entire team. Route calls dynamically to on-duty hosts and staff."
+        }
+    ];
+}
+
 const STEPS = [
     {
         title: "Setup your organization",

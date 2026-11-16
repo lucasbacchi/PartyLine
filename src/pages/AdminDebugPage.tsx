@@ -6,6 +6,16 @@ import Footer from "../components/Footer";
 import { auth, getFirebaseAppCheckToken } from "../firebase";
 import { IconShield, IconPhone } from "../components/Icons";
 
+export function meta() {
+    return [
+        { title: "Admin Diagnostics & Twilio Status | PartyLine" },
+        {
+            name: "description",
+            content: "System health check, service diagnostics, and Twilio testing."
+        }
+    ];
+}
+
 type ServiceGroup = Record<string, "ok" | "error">;
 type StatusResponse = { status: string; services: { firebase: ServiceGroup; twilio: ServiceGroup } };
 
