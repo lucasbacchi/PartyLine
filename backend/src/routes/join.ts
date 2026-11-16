@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { auth, db, type TenantRole } from "../firebase.js";
 import { writeRateLimit } from "../middleware/rateLimit.js";
 
@@ -133,7 +134,7 @@ router.get("/user", async (_req: Request, res: Response) => {
 
         const now = new Date();
         const invites = snapshot.docs
-            .map((d): UserInviteDoc => ({
+            .map((d: QueryDocumentSnapshot): UserInviteDoc => ({
                 id: d.id,
                 ...d.data()
             }))

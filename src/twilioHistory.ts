@@ -10,6 +10,10 @@ export type TwilioCallHistoryItem = {
     duration: number | null;
     createdAt: string | null;
     startedAt: string | null;
+    recordingUrl?: string | null;
+    recordingDuration?: number | null;
+    transcriptionText?: string | null;
+    isVoicemail?: boolean;
 };
 
 export type TwilioTextHistoryItem = {
@@ -29,7 +33,7 @@ type HistoryResponse = {
     error?: string;
 };
 
-const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const apiUrl = import.meta.env.VITE_API_URL ?? "https://api.partyline.lucasbacchi.com";
 
 async function requestHistory(
     user: User,
@@ -120,8 +124,82 @@ export async function initiateTwilioCall(
     return data.call;
 }
 
+export type TwilioVoiceTokenResponse = {
+    token: string;
+    identity: string;
+    twimlAppSid: string;
+    tenantPhoneNumber: string;
+};
+
+export async function fetchTwilioVoiceToken(user: User, tenantId: string): Promise<TwilioVoiceTokenResponse> {
+    const [appCheckToken, idToken] = await Promise.all([getFirebaseAppCheckToken(), user.getIdToken()]);
+    const response = await fetch(`${apiUrl}/api/tenants/${encodeURIComponent(tenantId)}/voice/token`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+            "X-Firebase-AppCheck": appCheckToken
+        }
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error ?? "Failed to acquire in-browser voice token.");
+    }
+    return data as TwilioVoiceTokenResponse;
+}
+
 export function formatHistoryTimestamp(value: string | null): string {
     if (!value) return "Date unavailable";
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
+}
+
+export async function startAdHocCallRecording(
+    user: User,
+    tenantId: string,
+    callSid: string
+): Promise<{ sid: string; status: string }> {
+    const [appCheckToken, idToken] = await Promise.all([getFirebaseAppCheckToken(), user.getIdToken()]);
+    const response = await fetch(
+        `${apiUrl}/api/tenants/${encodeURIComponent(tenantId)}/calls/${encodeURIComponent(callSid)}/record`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken}`,
+                "X-Firebase-AppCheck": appCheckToken
+            }
+        }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error ?? "Failed to start call recording.");
+    }
+    return data.recording as { sid: string; status: string };
+}
+
+export async function stopAdHocCallRecording(
+    user: User,
+    tenantId: string,
+    callSid: string,
+    recordingSid: string
+): Promise<{ sid: string; status: string }> {
+    const [appCheckToken, idToken] = await Promise.all([getFirebaseAppCheckToken(), user.getIdToken()]);
+    const response = await fetch(
+        `${apiUrl}/api/tenants/${encodeURIComponent(tenantId)}/calls/${encodeURIComponent(callSid)}/recordings/${encodeURIComponent(recordingSid)}/stop`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken}`,
+                "X-Firebase-AppCheck": appCheckToken
+            }
+        }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error ?? "Failed to stop call recording.");
+    }
+    return data.recording as { sid: string; status: string };
 }

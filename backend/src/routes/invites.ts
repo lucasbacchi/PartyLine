@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { db } from "../firebase.js";
 import { getTenantIdParam, getParam, parseRole, requireTenantAdmin } from "../middleware/tenantAuth.js";
 import { writeRateLimit } from "../middleware/rateLimit.js";
@@ -24,7 +25,7 @@ router.get("/", requireTenantAdmin, async (req: Request, res: Response) => {
 
         const now = new Date();
         const invites = snapshot.docs
-            .map((doc): InviteDocument => ({
+            .map((doc: QueryDocumentSnapshot): InviteDocument => ({
                 id: doc.id,
                 ...doc.data()
             }))

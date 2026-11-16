@@ -19,7 +19,7 @@ export function meta() {
 type ServiceGroup = Record<string, "ok" | "error">;
 type StatusResponse = { status: string; services: { firebase: ServiceGroup; twilio: ServiceGroup } };
 
-const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const apiUrl = import.meta.env.VITE_API_URL ?? "https://api.partyline.lucasbacchi.com";
 
 async function adminRequest(user: User, path: string, init?: RequestInit): Promise<Response> {
     const [appCheckToken, idToken] = await Promise.all([getFirebaseAppCheckToken(), user.getIdToken()]);

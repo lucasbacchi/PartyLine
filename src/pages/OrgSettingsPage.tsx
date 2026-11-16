@@ -458,6 +458,30 @@ export default function OrgSettingsPage() {
                                     </div>
                                 )}
 
+                                {/* WebRTC Browser Calling Org Toggle */}
+                                <div className="pt-2">
+                                    <label className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-4 cursor-pointer hover:border-slate-700 transition">
+                                        <div>
+                                            <p className="text-sm font-semibold text-white">
+                                                Allow Web Browser Calling (WebRTC)
+                                            </p>
+                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                Allow scheduled team members to answer incoming calls directly in their
+                                                browser. If disabled organization-wide, calls strictly route to members'
+                                                personal cell phones.
+                                            </p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={settings.enableWebCalls !== false}
+                                            onChange={(e) =>
+                                                setSettings({ ...settings, enableWebCalls: e.target.checked })
+                                            }
+                                            className="h-4 w-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+                                        />
+                                    </label>
+                                </div>
+
                                 {/* Answer Message / IVR */}
                                 <div className="pt-2">
                                     <label className="block text-xs font-medium text-slate-300">

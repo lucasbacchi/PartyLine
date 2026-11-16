@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { auth, db } from "../firebase.js";
 import { getUidParam } from "../middleware/tenantAuth.js";
 import { writeRateLimit } from "../middleware/rateLimit.js";
@@ -16,7 +17,7 @@ router.get("/me", async (_req: Request, res: Response) => {
         ]);
 
         const firestoreData = userDoc.exists ? userDoc.data()! : {};
-        const organizations = membershipsSnap.docs.map((d) => ({
+        const organizations = membershipsSnap.docs.map((d: QueryDocumentSnapshot) => ({
             tenantId: d.id,
             ...d.data()
         }));
@@ -31,6 +32,9 @@ router.get("/me", async (_req: Request, res: Response) => {
                 emailVerified: authUser?.emailVerified ?? false,
                 doNotDisturb: firestoreData.doNotDisturb === true,
                 notifySmsOnMissedCalls: firestoreData.notifySmsOnMissedCalls !== false,
+                enableWebCalls: firestoreData.enableWebCalls !== false,
+                webStatus: firestoreData.webStatus ?? "offline",
+                webLastActiveAt: firestoreData.webLastActiveAt ?? null,
                 createdAt: authUser?.metadata?.creationTime ?? firestoreData.createdAt ?? null
             },
             organizations
@@ -45,7 +49,8 @@ router.get("/me", async (_req: Request, res: Response) => {
 router.patch("/me", writeRateLimit, async (req: Request, res: Response) => {
     try {
         const uid = res.locals.user.uid;
-        const { displayName, phoneNumber, doNotDisturb, notifySmsOnMissedCalls } = req.body ?? {};
+        const { displayName, phoneNumber, doNotDisturb, notifySmsOnMissedCalls, enableWebCalls, webStatus } =
+            req.body ?? {};
 
         const authUpdates: { displayName?: string; phoneNumber?: string } = {};
         const firestoreUpdates: Record<string, unknown> = {
@@ -72,6 +77,15 @@ router.patch("/me", writeRateLimit, async (req: Request, res: Response) => {
 
         if (typeof notifySmsOnMissedCalls === "boolean") {
             firestoreUpdates.notifySmsOnMissedCalls = notifySmsOnMissedCalls;
+        }
+
+        if (typeof enableWebCalls === "boolean") {
+            firestoreUpdates.enableWebCalls = enableWebCalls;
+        }
+
+        if (typeof webStatus === "string") {
+            firestoreUpdates.webStatus = webStatus;
+            firestoreUpdates.webLastActiveAt = new Date();
         }
 
         // Apply Auth updates if any

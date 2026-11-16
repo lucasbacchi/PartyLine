@@ -33,3 +33,50 @@ export async function checkFirebaseServices(): Promise<Record<string, "ok" | "er
         storage: checks[2].status === "fulfilled" ? "ok" : "error"
     };
 }
+
+export async function uploadRecordingToFirebaseStorage(
+    tenantId: string,
+    recordingSid: string,
+    mp3Url: string,
+    authHeader?: string
+): Promise<string> {
+    try {
+        const fetchOptions: RequestInit = {};
+        if (authHeader) {
+            fetchOptions.headers = { Authorization: authHeader };
+        }
+        const res = await fetch(mp3Url, fetchOptions);
+        if (!res.ok) {
+            console.warn(`Could not fetch audio from ${mp3Url}: ${res.statusText}`);
+            return mp3Url;
+        }
+
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const bucket = storage.bucket(firebaseStorageBucket);
+        const destination = `tenants/${tenantId}/recordings/${recordingSid}.mp3`;
+        const file = bucket.file(destination);
+
+        await file.save(buffer, {
+            contentType: "audio/mpeg",
+            metadata: {
+                tenantId,
+                recordingSid
+            }
+        });
+
+        try {
+            await file.makePublic();
+            return `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        } catch {
+            const [signedUrl] = await file.getSignedUrl({
+                action: "read",
+                expires: Date.now() + 1000 * 60 * 60 * 24 * 365
+            });
+            return signedUrl;
+        }
+    } catch (err) {
+        console.warn("Firebase Storage recording upload notice:", err);
+        return mp3Url;
+    }
+}

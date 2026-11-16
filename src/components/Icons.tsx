@@ -300,3 +300,75 @@ export function IconChevronRight(props: SVGProps<SVGSVGElement>) {
         </svg>
     );
 }
+
+export function IconPhoneHangup(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.75 3.75L18 6m0 0l2.25 2.25M18 6l2.25-2.25M18 6l-2.25 2.25m1.5 5.25a15.75 15.75 0 01-15.5 0c-.574-.325-.86-1.002-.638-1.614l1.106-3.04a1.5 1.5 0 011.45-.98h2.648a1.5 1.5 0 011.428 1.037l.635 2.062a1.5 1.5 0 001.07.994l1.83.458a1.5 1.5 0 001.442-.458l1.83-.458a1.5 1.5 0 001.07-.994l.635-2.062a1.5 1.5 0 011.428-1.037h2.648a1.5 1.5 0 011.45.98l1.106 3.04c.222.612-.064 1.289-.638 1.614z"
+            />
+        </svg>
+    );
+}
+
+export function IconMicrophone(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3z"
+            />
+        </svg>
+    );
+}
+
+export function IconMicrophoneSlash(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 18.75a6 6 0 005.656-4.004M12 18.75a6 6 0 01-5.656-4.004m0 0L4.5 12.75M12 18.75v3.75m-3.75 0h7.5M12 15a3 3 0 002.828-2.001M12 15a3 3 0 01-2.828-2.001m0 0L3 3m18 18L3 3m6.172 6.172A3 3 0 0112 3a3 3 0 013 3v4.5"
+            />
+        </svg>
+    );
+}
+
+export function IconKeypad(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6zM7.5 8.25h.008v.008H7.5V8.25zm4.5 0h.008v.008H12V8.25zm4.5 0h.008v.008H16.5V8.25zm-9 3.75h.008v.008H7.5V12zm4.5 0h.008v.008H12V12zm4.5 0h.008v.008H16.5V12zm-9 3.75h.008v.008H7.5V15.75zm4.5 0h.008v.008H12V15.75zm4.5 0h.008v.008H16.5V15.75z"
+            />
+        </svg>
+    );
+}
+
+export function IconMinimize(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5M15 15l5.25 5.25"
+            />
+        </svg>
+    );
+}
+
+export function IconMaximize(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
+            />
+        </svg>
+    );
+}

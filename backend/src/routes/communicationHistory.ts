@@ -3,7 +3,13 @@ import twilio from "twilio";
 import { db } from "../firebase.js";
 import { requireTenantMember, getTenantIdParam } from "../middleware/tenantAuth.js";
 import { writeRateLimit } from "../middleware/rateLimit.js";
-import { getTwilioClient, validateTwilioPhoneNumber } from "../twilio.js";
+import {
+    getTwilioClient,
+    getTwilioConfig,
+    getTwilioTwimlAppSid,
+    getPhoneNumbers,
+    validateTwilioPhoneNumber
+} from "../twilio.js";
 
 const router = Router({ mergeParams: true });
 
@@ -16,6 +22,10 @@ type CallHistoryItem = {
     duration: number | null;
     createdAt: string | null;
     startedAt: string | null;
+    recordingUrl?: string | null;
+    recordingDuration?: number | null;
+    transcriptionText?: string | null;
+    isVoicemail?: boolean;
 };
 
 type TextHistoryItem = {
@@ -28,24 +38,6 @@ type TextHistoryItem = {
     createdAt: string | null;
     sentAt: string | null;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function getPhoneNumbers(value: unknown): string[] {
-    if (!Array.isArray(value)) return [];
-
-    return [
-        ...new Set(
-            value.flatMap((item): string[] => {
-                if (!isRecord(item) || typeof item.number !== "string") return [];
-                const number = item.number.trim();
-                return /^\+[1-9]\d{7,14}$/.test(number) ? [number] : [];
-            })
-        )
-    ];
-}
 
 function parseLimit(value: unknown): number {
     if (value === undefined) return 50;
@@ -104,6 +96,25 @@ router.get("/calls", requireTenantMember, async (req: Request, res: Response) =>
 
         const client = getTwilioClient();
         const callsBySid = new Map<string, CallHistoryItem>();
+
+        // Load voicemails and call recordings for tenant from Firestore
+        const recordingsSnap = await db.collection("recordings").where("tenantId", "==", tenantId).get();
+        const recordingsByCallSid = new Map<
+            string,
+            { url: string; duration: number; transcriptionText?: string; type: string }
+        >();
+
+        for (const doc of recordingsSnap.docs) {
+            const data = doc.data();
+            const sidKey = (data.callSid as string) || doc.id;
+            recordingsByCallSid.set(sidKey, {
+                url: (data.storageUrl as string) || (data.url as string) || "",
+                duration: Number(data.duration) || 0,
+                transcriptionText: (data.transcriptionText as string) || "",
+                type: (data.type as string) || "voicemail"
+            });
+        }
+
         for (const phoneNumber of tenant.numbers) {
             const [toNumber, fromNumber] = await Promise.all([
                 client.calls.list({ to: phoneNumber, limit }),
@@ -112,6 +123,7 @@ router.get("/calls", requireTenantMember, async (req: Request, res: Response) =>
 
             for (const call of [...toNumber, ...fromNumber]) {
                 const duration = call.duration === null ? null : Number.parseInt(call.duration, 10);
+                const recording = recordingsByCallSid.get(call.sid);
                 callsBySid.set(call.sid, {
                     sid: call.sid,
                     from: call.from,
@@ -120,7 +132,38 @@ router.get("/calls", requireTenantMember, async (req: Request, res: Response) =>
                     direction: call.direction,
                     duration: duration !== null && Number.isFinite(duration) ? duration : null,
                     createdAt: call.dateCreated?.toISOString() ?? null,
-                    startedAt: call.startTime?.toISOString() ?? null
+                    startedAt: call.startTime?.toISOString() ?? null,
+                    recordingUrl: recording?.url || null,
+                    recordingDuration: recording?.duration || null,
+                    transcriptionText: recording?.transcriptionText || null,
+                    isVoicemail: recording?.type === "voicemail"
+                });
+            }
+        }
+
+        // Add any voicemails from Firestore not present in direct Twilio calls list
+        for (const doc of recordingsSnap.docs) {
+            const data = doc.data();
+            const sidKey = (data.callSid as string) || doc.id;
+            if (!callsBySid.has(sidKey)) {
+                const createdAt =
+                    data.createdAt && typeof (data.createdAt as { toDate?: () => Date }).toDate === "function"
+                        ? (data.createdAt as { toDate: () => Date }).toDate().toISOString()
+                        : new Date().toISOString();
+
+                callsBySid.set(sidKey, {
+                    sid: sidKey,
+                    from: (data.from as string) || "Unknown",
+                    to: (data.to as string) || "",
+                    status: "completed",
+                    direction: "inbound",
+                    duration: Number(data.duration) || 0,
+                    createdAt,
+                    startedAt: createdAt,
+                    recordingUrl: (data.storageUrl as string) || (data.url as string) || null,
+                    recordingDuration: Number(data.duration) || null,
+                    transcriptionText: (data.transcriptionText as string) || null,
+                    isVoicemail: data.type === "voicemail"
                 });
             }
         }
@@ -326,6 +369,144 @@ router.post("/calls", requireTenantMember, writeRateLimit, async (req: Request, 
     } catch (error) {
         console.error("Twilio call back error:", error);
         res.status(400).json({ error: error instanceof Error ? error.message : "Unable to initiate call back." });
+    }
+});
+
+// POST /tenants/:tenantId/voice/token - Generate a Twilio Voice Access Token for WebRTC in-browser calling
+router.post("/voice/token", requireTenantMember, async (req: Request, res: Response) => {
+    try {
+        const tenantId = getTenantIdParam(req);
+        const tenant = await loadTenantNumbers(tenantId);
+        if (!tenant.exists || tenant.numbers.length === 0) {
+            res.status(400).json({ error: "Organization has no configured phone numbers." });
+            return;
+        }
+
+        const config = getTwilioConfig();
+        const twimlAppSid = getTwilioTwimlAppSid();
+        const uid = res.locals.user?.uid || "anonymous";
+        const identity = `member_${tenantId}_${uid}`;
+
+        // Ensure TwiML App's voiceUrl points to the public backend endpoint
+        const targetVoiceUrl = `${(process.env.PUBLIC_BASE_URL?.trim() || "https://api.partyline.lucasbacchi.com").replace(/\/+$/, "")}/twilio/webhooks/voice/outbound`;
+        getTwilioClient()
+            .applications(twimlAppSid)
+            .update({ voiceUrl: targetVoiceUrl, voiceMethod: "POST" })
+            .catch((err) => console.warn("Could not verify/update TwiML app voiceUrl:", err?.message || err));
+
+        const AccessToken = twilio.jwt.AccessToken;
+        const VoiceGrant = AccessToken.VoiceGrant;
+
+        const voiceGrant = new VoiceGrant({
+            outgoingApplicationSid: twimlAppSid,
+            incomingAllow: true
+        });
+
+        const token = new AccessToken(config.accountSid, config.apiKeySid, config.apiKeySecret, {
+            identity,
+            ttl: 3600
+        });
+        token.addGrant(voiceGrant);
+
+        res.json({
+            token: token.toJwt(),
+            identity,
+            twimlAppSid,
+            tenantPhoneNumber: tenant.numbers[0]
+        });
+    } catch (error) {
+        console.error("Twilio Voice token generation error:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Unable to generate Voice token."
+        });
+    }
+});
+
+// POST /tenants/:tenantId/calls/:callSid/record - Start ad hoc call recording
+router.post("/calls/:callSid/record", requireTenantMember, writeRateLimit, async (req: Request, res: Response) => {
+    try {
+        const tenantId = getTenantIdParam(req);
+        const callSid = String(req.params.callSid || "").trim();
+
+        if (!callSid || !callSid.startsWith("CA")) {
+            res.status(400).json({ error: "A valid Twilio Call SID is required." });
+            return;
+        }
+
+        const client = getTwilioClient();
+        const baseUrl = (process.env.PUBLIC_BASE_URL?.trim() || "https://api.partyline.lucasbacchi.com").replace(
+            /\/+$/,
+            ""
+        );
+        const recordingStatusCallback = `${baseUrl}/twilio/webhooks/voice/recording-status?tenantId=${tenantId}&type=call_recording`;
+
+        const recording = await client.calls(callSid).recordings.create({
+            recordingStatusCallback,
+            recordingChannels: "dual"
+        });
+
+        res.status(201).json({
+            recording: {
+                sid: recording.sid,
+                callSid: recording.callSid,
+                status: recording.status
+            }
+        });
+    } catch (error) {
+        console.error("Failed to start ad hoc recording:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Unable to start call recording." });
+    }
+});
+
+// POST /tenants/:tenantId/calls/:callSid/recordings/:recordingSid/stop - Stop ad hoc call recording
+router.post(
+    "/calls/:callSid/recordings/:recordingSid/stop",
+    requireTenantMember,
+    writeRateLimit,
+    async (req: Request, res: Response) => {
+        try {
+            const callSid = String(req.params.callSid || "").trim();
+            const recordingSid = String(req.params.recordingSid || "").trim();
+
+            const client = getTwilioClient();
+            const recording = await client.calls(callSid).recordings(recordingSid).update({ status: "stopped" });
+
+            res.json({
+                recording: {
+                    sid: recording.sid,
+                    callSid: recording.callSid,
+                    status: recording.status
+                }
+            });
+        } catch (error) {
+            console.error("Failed to stop ad hoc recording:", error);
+            res.status(400).json({ error: error instanceof Error ? error.message : "Unable to stop call recording." });
+        }
+    }
+);
+
+// GET /tenants/:tenantId/recordings - List all voicemails and recordings
+router.get("/recordings", requireTenantMember, async (req: Request, res: Response) => {
+    try {
+        const tenantId = getTenantIdParam(req);
+        const snapshot = await db.collection("recordings").where("tenantId", "==", tenantId).get();
+
+        const recordings = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            const createdAt =
+                data.createdAt && typeof (data.createdAt as { toDate?: () => Date }).toDate === "function"
+                    ? (data.createdAt as { toDate: () => Date }).toDate().toISOString()
+                    : data.createdAt;
+            return {
+                id: docSnap.id,
+                ...data,
+                createdAt
+            };
+        });
+
+        res.json({ recordings });
+    } catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Unable to list recordings." });
     }
 });
 

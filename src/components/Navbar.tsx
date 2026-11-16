@@ -6,7 +6,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 
 export default function Navbar() {
-    const { user, currentTenant, tenants, switchTenant, userProfile } = useApp();
+    const { user, currentTenant, tenants, switchTenant, userProfile, toggleWebCalls } = useApp();
     const location = useLocation();
     const navigate = useNavigate();
     const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false);
@@ -187,6 +187,43 @@ export default function Navbar() {
                             </Link>
                         )}
 
+                        {/* Global Web Calls quick status toggle */}
+                        <button
+                            type="button"
+                            onClick={() => toggleWebCalls()}
+                            className={`hidden sm:flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition ${
+                                userProfile.enableWebCalls !== false
+                                    ? userProfile.webStatus === "idle"
+                                        ? "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                                    : "border-slate-700 bg-slate-900/60 text-slate-400 hover:bg-slate-800"
+                            }`}
+                            title={
+                                userProfile.enableWebCalls !== false
+                                    ? userProfile.webStatus === "idle"
+                                        ? "Web Calls Enabled (Status: Idle - Calls ring cell phone first). Click to toggle off."
+                                        : "Web Calls Enabled (Status: Active). Click to toggle off."
+                                    : "Web Calls Disabled (All calls route to cell phone). Click to toggle on."
+                            }
+                        >
+                            <span
+                                className={`h-2 w-2 rounded-full ${
+                                    userProfile.enableWebCalls !== false
+                                        ? userProfile.webStatus === "idle"
+                                            ? "bg-amber-400 animate-pulse"
+                                            : "bg-emerald-400 animate-pulse"
+                                        : "bg-slate-500"
+                                }`}
+                            />
+                            <span>
+                                {userProfile.enableWebCalls !== false
+                                    ? userProfile.webStatus === "idle"
+                                        ? "Idle: Cell First"
+                                        : "Web Calls: On"
+                                    : "Calls: Cell Only"}
+                            </span>
+                        </button>
+
                         {/* User profile dropdown */}
                         <div className="relative" ref={userMenuRef}>
                             <button
@@ -201,12 +238,39 @@ export default function Navbar() {
                             </button>
 
                             {isUserMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-2xl ring-1 ring-black/50 z-50">
+                                <div className="absolute right-0 mt-2 w-64 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-2xl ring-1 ring-black/50 z-50">
                                     <div className="border-b border-slate-800 px-3 py-2">
                                         <p className="text-sm font-semibold text-white truncate">{displayName}</p>
                                         <p className="text-xs text-slate-400 truncate">
                                             {user?.email || userProfile.email}
                                         </p>
+                                    </div>
+                                    <div className="border-b border-slate-800 p-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleWebCalls()}
+                                            className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-slate-800 transition"
+                                        >
+                                            <div>
+                                                <p className="text-xs font-semibold text-white">Receive Web Calls</p>
+                                                <p className="text-[10px] text-slate-400">
+                                                    {userProfile.enableWebCalls !== false
+                                                        ? userProfile.webStatus === "idle"
+                                                            ? "Active (Idle: rings cell phone first)"
+                                                            : "Active & Ringing on Desktop"
+                                                        : "Off: Always rings cell phone"}
+                                                </p>
+                                            </div>
+                                            <div
+                                                className={`w-8 h-4 flex items-center rounded-full p-0.5 transition-colors ${
+                                                    userProfile.enableWebCalls !== false
+                                                        ? "bg-blue-600 justify-end"
+                                                        : "bg-slate-700 justify-start"
+                                                }`}
+                                            >
+                                                <div className="bg-white w-3 h-3 rounded-full shadow-md" />
+                                            </div>
+                                        </button>
                                     </div>
                                     <div className="py-1">
                                         <Link

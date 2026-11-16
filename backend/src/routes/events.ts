@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { db } from "../firebase.js";
 import { getTenantIdParam, getParam, requireTenantAdmin, requireTenantMember } from "../middleware/tenantAuth.js";
 import { writeRateLimit } from "../middleware/rateLimit.js";
@@ -16,7 +17,7 @@ function parseDate(value: unknown, fieldName: string): Date {
     return d;
 }
 
-function isEventCurrentlyActive(data: Record<string, unknown>, now: Date = new Date()): boolean {
+export function isEventCurrentlyActive(data: Record<string, unknown>, now: Date = new Date()): boolean {
     const startDate =
         data.start && typeof (data.start as { toDate?: () => Date }).toDate === "function"
             ? (data.start as { toDate: () => Date }).toDate()
@@ -80,9 +81,15 @@ router.get("/", requireTenantMember, async (req: Request, res: Response) => {
             .orderBy("start", "asc")
             .get();
 
+        interface EventListItem {
+            id: string;
+            status: "active" | "upcoming" | "past";
+            [key: string]: unknown;
+        }
+
         const now = new Date();
         const events = snapshot.docs
-            .map((doc) => {
+            .map((doc: QueryDocumentSnapshot): EventListItem => {
                 const data = doc.data();
                 const startDate = data.start?.toDate ? data.start.toDate() : new Date(data.start);
                 const endDate = data.end?.toDate ? data.end.toDate() : new Date(data.end);
@@ -115,7 +122,7 @@ router.get("/", requireTenantMember, async (req: Request, res: Response) => {
                     status: eventStatus
                 };
             })
-            .filter((e) => {
+            .filter((e: EventListItem) => {
                 const targetFilter = (status as string) || (filter as string);
                 if (!targetFilter || targetFilter === "all") return true;
                 if (targetFilter === "past") return e.status === "past";
@@ -138,7 +145,7 @@ router.get("/current", requireTenantMember, async (req: Request, res: Response) 
 
         const snapshot = await db.collection("tenants").doc(tenantId).collection("events").get();
 
-        const activeEventDoc = snapshot.docs.find((doc) => {
+        const activeEventDoc = snapshot.docs.find((doc: QueryDocumentSnapshot) => {
             return isEventCurrentlyActive(doc.data(), now);
         });
 

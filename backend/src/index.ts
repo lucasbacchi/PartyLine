@@ -1,13 +1,17 @@
 import "dotenv/config";
 import cors from "cors";
 import express, { type Request, type Response } from "express";
-import { auth, checkFirebaseServices, db, type TenantRole } from "./firebase.js";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { auth, checkFirebaseServices, db, uploadRecordingToFirebaseStorage, type TenantRole } from "./firebase.js";
 import twilio from "twilio";
 import { requireAdmin, requireAppCheck, requireFirebaseAuth } from "./middleware/firebase.js";
 import { authenticatedRateLimit, publicRateLimit, writeRateLimit } from "./middleware/rateLimit.js";
 import {
     checkTwilioServices,
+    formatPhoneForSpeech,
+    getPhoneNumbers,
     getTwilioClient,
+    getTwilioConfig,
     getTwilioWebhookAuthToken,
     validateTwilioPhoneNumber
 } from "./twilio.js";
@@ -15,7 +19,7 @@ import usersRouter from "./routes/users.js";
 import tenantsRouter from "./routes/tenants.js";
 import membersRouter from "./routes/members.js";
 import phoneNumbersRouter from "./routes/phoneNumbers.js";
-import eventsRouter from "./routes/events.js";
+import eventsRouter, { isEventCurrentlyActive } from "./routes/events.js";
 import invitesRouter from "./routes/invites.js";
 import joinRouter from "./routes/join.js";
 import twilioNumbersRouter from "./routes/twilioNumbers.js";
@@ -23,7 +27,10 @@ import communicationHistoryRouter from "./routes/communicationHistory.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 8080);
-const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "https://partyline.lucasbacchi.com,http://localhost:5173")
+const allowedOrigins = (
+    process.env.ALLOWED_ORIGINS ??
+    "https://partyline.lucasbacchi.com,https://api.partyline.lucasbacchi.com,http://localhost:5173,http://localhost:5174"
+)
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -95,23 +102,32 @@ function getOptionalString(value: unknown, fieldName: string): string | undefine
 function getWebhookUrl(req: Request): string {
     const baseUrl = process.env.PUBLIC_BASE_URL?.trim();
 
-    if (!baseUrl) {
-        throw new Error("PUBLIC_BASE_URL is required for Twilio webhook validation");
+    if (baseUrl && !baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1")) {
+        const parsedBaseUrl = new URL(baseUrl);
+        return new URL(req.originalUrl, `${parsedBaseUrl.toString().replace(/\/+$/, "")}/`).toString();
     }
 
-    const parsedBaseUrl = new URL(baseUrl);
+    const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
+    const host = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost:8080";
+    return `${proto}://${host}${req.originalUrl}`;
+}
 
-    if (parsedBaseUrl.protocol !== "http:" && parsedBaseUrl.protocol !== "https:") {
-        throw new Error("PUBLIC_BASE_URL must use http or https");
-    }
-
-    return new URL(req.originalUrl, `${parsedBaseUrl.toString().replace(/\/+$/, "")}/`).toString();
+export function getPublicUrl(path: string): string {
+    const baseUrl = (process.env.PUBLIC_BASE_URL?.trim() || "https://api.partyline.lucasbacchi.com").replace(
+        /\/+$/,
+        ""
+    );
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${baseUrl}${cleanPath}`;
 }
 
 function requireValidTwilioRequest(req: Request, res: Response): boolean {
     const signature = req.header("X-Twilio-Signature");
 
     if (!signature) {
+        if (process.env.SKIP_TWILIO_VALIDATION === "true" || process.env.NODE_ENV !== "production") {
+            return true;
+        }
         res.status(401).type("text/plain").send("Missing Twilio signature");
         return false;
     }
@@ -127,6 +143,9 @@ function requireValidTwilioRequest(req: Request, res: Response): boolean {
 
         if (!isValid) {
             console.warn(`Rejected Twilio webhook signature for ${req.method} ${webhookUrl}`);
+            if (process.env.SKIP_TWILIO_VALIDATION === "true" || process.env.NODE_ENV !== "production") {
+                return true;
+            }
             res.status(401).type("text/plain").send("Invalid Twilio signature");
             return false;
         }
@@ -134,6 +153,9 @@ function requireValidTwilioRequest(req: Request, res: Response): boolean {
         return true;
     } catch (error) {
         console.error("Twilio webhook validation failed", error);
+        if (process.env.SKIP_TWILIO_VALIDATION === "true" || process.env.NODE_ENV !== "production") {
+            return true;
+        }
         res.status(500).type("text/plain").send("Twilio webhook validation is unavailable");
         return false;
     }
@@ -168,24 +190,602 @@ app.post("/twilio/webhooks/voice", async (req: Request, res: Response) => {
         return;
     }
 
-    const response = new twilio.twiml.VoiceResponse();
-    response.say("Thank you for calling PartyLine. Your call has been received.");
-
     try {
-        await db.collection("twilio_events").add({
-            type: "call",
-            sid: req.body.CallSid ?? null,
-            from: req.body.From ?? null,
-            to: req.body.To ?? null,
-            status: req.body.CallStatus ?? null,
-            direction: req.body.Direction ?? null,
-            receivedAt: new Date()
+        const to = (req.body.To || req.body.Called || "").trim();
+        const from = (req.body.From || req.body.Caller || "").trim();
+
+        // 1. Find matching tenant by phone number
+        interface TenantSettings {
+            answerMessage?: string;
+            ringTimeoutSeconds?: number | string;
+            fallbackPhone?: string;
+            enableWebCalls?: boolean;
+            routingStrategy?: string;
+            [key: string]: unknown;
+        }
+
+        interface TenantRecord {
+            phoneNumbers?: unknown;
+            settings?: TenantSettings;
+            [key: string]: unknown;
+        }
+
+        interface ActiveEventRecord {
+            id: string;
+            title?: string;
+            primaryHostUid?: string;
+            primaryHostPhone?: string;
+            backupHostUid?: string;
+            backupHostPhone?: string;
+            [key: string]: unknown;
+        }
+
+        const tenantsSnap = await db.collection("tenants").get();
+        let matchedTenant: TenantRecord | null = null;
+        let matchedTenantId: string | null = null;
+        for (const doc of tenantsSnap.docs) {
+            const data = doc.data() as TenantRecord;
+            const numbers = getPhoneNumbers(data.phoneNumbers);
+            if (numbers.includes(to)) {
+                matchedTenant = data;
+                matchedTenantId = doc.id;
+                break;
+            }
+        }
+
+        // Fallback: pick first tenant with numbers if exact match not found
+        if (!matchedTenant && tenantsSnap.docs.length > 0) {
+            matchedTenant = tenantsSnap.docs[0].data() as TenantRecord;
+            matchedTenantId = tenantsSnap.docs[0].id;
+        }
+
+        // 2. Check for active on-duty event right now
+        const now = new Date();
+        let activeEvent: ActiveEventRecord | null = null;
+        if (matchedTenantId) {
+            const eventsSnap = await db.collection("tenants").doc(matchedTenantId).collection("events").get();
+            const activeDoc = eventsSnap.docs.find((d: QueryDocumentSnapshot) => isEventCurrentlyActive(d.data(), now));
+            if (activeDoc) {
+                activeEvent = { id: activeDoc.id, ...activeDoc.data() } as ActiveEventRecord;
+            }
+        }
+
+        const response = new twilio.twiml.VoiceResponse();
+
+        // Optional custom greeting from settings
+        const greeting = matchedTenant?.settings?.answerMessage;
+        if (greeting && typeof greeting === "string" && greeting.trim()) {
+            response.say(greeting.trim());
+        }
+
+        const ringTimeout = Math.min(60, Math.max(10, Number(matchedTenant?.settings?.ringTimeoutSeconds ?? 25)));
+
+        const dialStatusUrl = getPublicUrl(
+            `/twilio/webhooks/voice/dial-status?tenantId=${matchedTenantId || ""}&eventId=${activeEvent?.id || ""}&attempt=primary&caller=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        );
+
+        const dial = response.dial({
+            timeout: ringTimeout,
+            callerId: from || to,
+            answerOnBridge: true,
+            action: dialStatusUrl,
+            method: "POST"
         });
+
+        let hasTargets = false;
+
+        // 3. Evaluate on-duty host preferences and presence
+        const orgEnableWebCalls = matchedTenant?.settings?.enableWebCalls !== false;
+
+        if (matchedTenantId && activeEvent?.primaryHostUid) {
+            const hostUserDoc = await db.collection("users").doc(activeEvent.primaryHostUid).get();
+            const hostData = hostUserDoc.exists ? hostUserDoc.data() : null;
+
+            const hostDnd = hostData?.doNotDisturb === true;
+            const hostEnableWebCalls = hostData?.enableWebCalls !== false;
+            const hostWebStatus = typeof hostData?.webStatus === "string" ? hostData.webStatus : "offline";
+            const hostLastActive = hostData?.webLastActiveAt?.toDate
+                ? hostData.webLastActiveAt.toDate()
+                : hostData?.webLastActiveAt
+                  ? new Date(hostData.webLastActiveAt as string | number)
+                  : null;
+
+            // Host is actively using the web app if:
+            // 1. Org and host both permit web calls
+            // 2. Web status is "active" (not idle or offline)
+            // 3. Heartbeat was received within the last 2 minutes (120 seconds)
+            const isHostActiveOnWeb =
+                orgEnableWebCalls &&
+                hostEnableWebCalls &&
+                hostWebStatus === "active" &&
+                hostLastActive !== null &&
+                now.getTime() - hostLastActive.getTime() < 120_000;
+
+            if (!hostDnd) {
+                // If user has the app open and is actively using it, ring WebRTC device in browser
+                if (isHostActiveOnWeb) {
+                    dial.client(`member_${matchedTenantId}_${activeEvent.primaryHostUid}`);
+                    hasTargets = true;
+                }
+
+                // DTMF Call Screening: when ringing volunteer's mobile, whisper screening prompt requiring keypress '1'
+                if (activeEvent.primaryHostPhone) {
+                    try {
+                        const cleanPhone = validateTwilioPhoneNumber(activeEvent.primaryHostPhone, "primaryHostPhone");
+                        const screenUrl = getPublicUrl(
+                            `/twilio/webhooks/voice/screen?tenantId=${matchedTenantId || ""}&hostUid=${activeEvent.primaryHostUid || ""}&caller=${encodeURIComponent(from)}&eventTitle=${encodeURIComponent(activeEvent.title || "PartyLine Rental")}&role=primary`
+                        );
+                        dial.number({ url: screenUrl, method: "POST" }, cleanPhone);
+                        hasTargets = true;
+                    } catch {}
+                }
+            } else {
+                console.log(`Primary host ${activeEvent.primaryHostUid} is on Do Not Disturb.`);
+            }
+        }
+
+        // If no active event, ring active tenant members who are active on web
+        if (!activeEvent && matchedTenantId) {
+            const membersSnap = await db
+                .collection("tenants")
+                .doc(matchedTenantId)
+                .collection("members")
+                .where("active", "==", true)
+                .get();
+
+            if (orgEnableWebCalls) {
+                for (const mDoc of membersSnap.docs) {
+                    const memberUserDoc = await db.collection("users").doc(mDoc.id).get();
+                    const mData = memberUserDoc.exists ? memberUserDoc.data() : null;
+                    const mEnableWebCalls = mData?.enableWebCalls !== false;
+                    const mWebStatus = typeof mData?.webStatus === "string" ? mData.webStatus : "offline";
+                    const mLastActive = mData?.webLastActiveAt?.toDate
+                        ? mData.webLastActiveAt.toDate()
+                        : mData?.webLastActiveAt
+                          ? new Date(mData.webLastActiveAt as string | number)
+                          : null;
+
+                    const isMemberActiveOnWeb =
+                        mEnableWebCalls &&
+                        mWebStatus === "active" &&
+                        mLastActive !== null &&
+                        now.getTime() - mLastActive.getTime() < 120_000;
+
+                    if (isMemberActiveOnWeb && mData?.doNotDisturb !== true) {
+                        dial.client(`member_${matchedTenantId}_${mDoc.id}`);
+                        hasTargets = true;
+                    }
+                }
+            }
+        }
+
+        // 4. If no event target, ring fallback phone with DTMF screening if configured
+        if (!hasTargets && matchedTenant?.settings?.fallbackPhone) {
+            try {
+                const cleanFallback = validateTwilioPhoneNumber(matchedTenant.settings.fallbackPhone, "fallbackPhone");
+                const screenUrl = getPublicUrl(
+                    `/twilio/webhooks/voice/screen?tenantId=${matchedTenantId || ""}&caller=${encodeURIComponent(from)}&eventTitle=PartyLine&role=fallback`
+                );
+                dial.number({ url: screenUrl, method: "POST" }, cleanFallback);
+                hasTargets = true;
+            } catch {}
+        }
+
+        // 5. If no targets at all, route directly to PartyLine Voicemail
+        if (!hasTargets) {
+            response.say(
+                "Thank you for calling PartyLine. No team members are currently available to take your call. Please leave your name, phone number, and a detailed message after the tone."
+            );
+            const vmActionUrl = getPublicUrl(
+                `/twilio/webhooks/voice/voicemail?tenantId=${matchedTenantId || ""}&eventId=${activeEvent?.id || ""}&caller=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+            );
+            const recStatusUrl = getPublicUrl(
+                `/twilio/webhooks/voice/recording-status?tenantId=${matchedTenantId || ""}&eventId=${activeEvent?.id || ""}&type=voicemail&caller=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+            );
+            const transUrl = getPublicUrl(
+                `/twilio/webhooks/voice/transcription?tenantId=${matchedTenantId || ""}&eventId=${activeEvent?.id || ""}&caller=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+            );
+            response.record({
+                action: vmActionUrl,
+                recordingStatusCallback: recStatusUrl,
+                transcribe: true,
+                transcribeCallback: transUrl,
+                maxLength: 180,
+                playBeep: true
+            });
+            response.say("We did not receive a message. Thank you for calling. Goodbye.");
+            response.hangup();
+        }
+
+        // 6. Log inbound call event in Firestore
+        try {
+            await db.collection("twilio_events").add({
+                type: "call",
+                sid: req.body.CallSid ?? null,
+                from: from || null,
+                to: to || null,
+                status: req.body.CallStatus ?? "in-progress",
+                direction: "inbound",
+                tenantId: matchedTenantId || null,
+                eventId: activeEvent?.id || null,
+                eventTitle: activeEvent?.title || null,
+                receivedAt: new Date()
+            });
+        } catch (error) {
+            console.error("Unable to record inbound Twilio call", error);
+        }
+
+        res.type("text/xml").send(response.toString());
     } catch (error) {
-        console.error("Unable to record inbound Twilio call", error);
+        console.error("Inbound voice webhook error:", error);
+        const response = new twilio.twiml.VoiceResponse();
+        response.say("An error occurred while connecting your call. Please try again later.");
+        res.type("text/xml").send(response.toString());
+    }
+});
+
+// DTMF Call Screening: Webhook executed when volunteer / staff member answers their phone
+app.post("/twilio/webhooks/voice/screen", (req: Request, res: Response) => {
+    if (!requireValidTwilioRequest(req, res)) return;
+
+    const caller = (req.query.caller as string) || (req.body.From as string) || "";
+    const eventTitle = (req.query.eventTitle as string) || "PartyLine Rental";
+
+    const response = new twilio.twiml.VoiceResponse();
+    const confirmUrl = getPublicUrl("/twilio/webhooks/voice/screen/confirm");
+
+    const gather = response.gather({
+        action: confirmUrl,
+        method: "POST",
+        numDigits: 1,
+        timeout: 10
+    });
+
+    const spokenCaller = formatPhoneForSpeech(caller);
+    gather.say(
+        `PartyLine call for ${eventTitle} from ${spokenCaller}. Press 1 to accept this call, or hang up to decline.`
+    );
+
+    // If volunteer doesn't press 1 within 10s or if personal carrier voicemail picked up:
+    response.say("Call not accepted. Goodbye.");
+    response.hangup();
+
+    res.type("text/xml").send(response.toString());
+});
+
+// DTMF Call Screening Confirm: Connects caller if 1 is pressed; otherwise declines
+app.post("/twilio/webhooks/voice/screen/confirm", (req: Request, res: Response) => {
+    if (!requireValidTwilioRequest(req, res)) return;
+
+    const digits = (req.body.Digits as string) || "";
+    const response = new twilio.twiml.VoiceResponse();
+
+    if (digits.trim() === "1") {
+        response.say("Connecting you now.");
+        // No hangup! Twilio bridges the volunteer and caller
+    } else {
+        response.say("Call declined. Goodbye.");
+        response.hangup();
     }
 
     res.type("text/xml").send(response.toString());
+});
+
+// Dial Status Callback: Handles fallback to backup host, then rollover to PartyLine voicemail
+app.post("/twilio/webhooks/voice/dial-status", async (req: Request, res: Response) => {
+    if (!requireValidTwilioRequest(req, res)) return;
+
+    const dialStatus = (req.body.DialCallStatus as string) || "";
+    const attempt = (req.query.attempt as string) || "primary";
+    const tenantId = (req.query.tenantId as string) || "";
+    const eventId = (req.query.eventId as string) || "";
+    const caller = (req.query.caller as string) || (req.body.From as string) || "";
+    const to = (req.query.to as string) || (req.body.To as string) || "";
+
+    const response = new twilio.twiml.VoiceResponse();
+
+    // If call was connected and completed, hang up cleanly
+    if (dialStatus === "completed") {
+        response.hangup();
+        res.type("text/xml").send(response.toString());
+        return;
+    }
+
+    // Call was not answered or rejected (busy, no-answer, canceled, failed)
+    // Check if primary attempt failed and backup host exists
+    if (attempt === "primary" && tenantId && eventId) {
+        try {
+            const eventDoc = await db.collection("tenants").doc(tenantId).collection("events").doc(eventId).get();
+            const eventData = eventDoc.exists ? eventDoc.data() : null;
+
+            if (eventData?.backupHostPhone) {
+                const cleanBackup = validateTwilioPhoneNumber(eventData.backupHostPhone, "backupHostPhone");
+                response.say(
+                    "The primary host is unavailable. Please hold while we connect you to our backup host on duty."
+                );
+
+                const backupStatusUrl = getPublicUrl(
+                    `/twilio/webhooks/voice/dial-status?tenantId=${tenantId}&eventId=${eventId}&attempt=backup&caller=${encodeURIComponent(caller)}&to=${encodeURIComponent(to)}`
+                );
+
+                const dial = response.dial({
+                    timeout: 20,
+                    callerId: to || caller,
+                    action: backupStatusUrl,
+                    method: "POST"
+                });
+
+                const backupScreenUrl = getPublicUrl(
+                    `/twilio/webhooks/voice/screen?tenantId=${tenantId}&hostUid=${eventData.backupHostUid || ""}&caller=${encodeURIComponent(caller)}&eventTitle=${encodeURIComponent(eventData.title || "PartyLine Rental")}&role=backup`
+                );
+                dial.number({ url: backupScreenUrl, method: "POST" }, cleanBackup);
+
+                res.type("text/xml").send(response.toString());
+                return;
+            }
+        } catch (err) {
+            console.warn("Failed checking backup host on dial status callback:", err);
+        }
+    }
+
+    // If backup host failed or no backup host: Route to PartyLine Voicemail!
+    response.say(
+        "Thank you for calling. No team members are currently available to take your call. Please leave your name, phone number, and a detailed message after the tone."
+    );
+
+    const vmActionUrl = getPublicUrl(
+        `/twilio/webhooks/voice/voicemail?tenantId=${tenantId}&eventId=${eventId}&caller=${encodeURIComponent(caller)}&to=${encodeURIComponent(to)}`
+    );
+    const recordingStatusUrl = getPublicUrl(
+        `/twilio/webhooks/voice/recording-status?tenantId=${tenantId}&eventId=${eventId}&type=voicemail&caller=${encodeURIComponent(caller)}&to=${encodeURIComponent(to)}`
+    );
+    const transcriptionUrl = getPublicUrl(
+        `/twilio/webhooks/voice/transcription?tenantId=${tenantId}&eventId=${eventId}&caller=${encodeURIComponent(caller)}&to=${encodeURIComponent(to)}`
+    );
+
+    response.record({
+        action: vmActionUrl,
+        recordingStatusCallback: recordingStatusUrl,
+        transcribe: true,
+        transcribeCallback: transcriptionUrl,
+        maxLength: 180,
+        playBeep: true
+    });
+
+    response.say("We did not receive a message. Thank you for calling. Goodbye.");
+    response.hangup();
+
+    res.type("text/xml").send(response.toString());
+});
+
+// Voicemail completion prompt
+app.post("/twilio/webhooks/voice/voicemail", (req: Request, res: Response) => {
+    if (!requireValidTwilioRequest(req, res)) return;
+
+    const response = new twilio.twiml.VoiceResponse();
+    response.say("Thank you for your message. Your team has been notified. Goodbye.");
+    response.hangup();
+
+    res.type("text/xml").send(response.toString());
+});
+
+// Recording Status Callback: Archives audio and saves metadata to Firestore
+app.post("/twilio/webhooks/voice/recording-status", async (req: Request, res: Response) => {
+    if (!requireValidTwilioRequest(req, res)) return;
+
+    try {
+        const recordingSid = req.body.RecordingSid as string;
+        const callSid = req.body.CallSid as string;
+        const recordingUrl = req.body.RecordingUrl as string;
+        const duration = Number(req.body.RecordingDuration) || 0;
+        const tenantId = (req.query.tenantId as string) || "";
+        const eventId = (req.query.eventId as string) || "";
+        const caller = (req.query.caller as string) || req.body.From || "";
+        const to = (req.query.to as string) || req.body.To || "";
+        const type = (req.query.type as string) || "voicemail";
+
+        if (!recordingSid || !recordingUrl) {
+            res.status(200).send("OK");
+            return;
+        }
+
+        const mp3Url = recordingUrl.endsWith(".mp3") ? recordingUrl : `${recordingUrl}.mp3`;
+
+        const recordingRecord = {
+            sid: recordingSid,
+            callSid: callSid || null,
+            tenantId: tenantId || null,
+            eventId: eventId || null,
+            from: caller || null,
+            to: to || null,
+            duration,
+            url: mp3Url,
+            type, // "voicemail" | "call_recording"
+            status: "completed",
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        await db.collection("recordings").doc(recordingSid).set(recordingRecord, { merge: true });
+
+        // Asynchronously copy recording to Firebase Storage for permanent archival
+        if (tenantId) {
+            const config = getTwilioConfig();
+            const authHeader =
+                "Basic " + Buffer.from(`${config.accountSid}:${getTwilioWebhookAuthToken()}`).toString("base64");
+            uploadRecordingToFirebaseStorage(tenantId, recordingSid, mp3Url, authHeader)
+                .then(async (storageUrl) => {
+                    await db.collection("recordings").doc(recordingSid).set(
+                        {
+                            storageUrl,
+                            url: storageUrl,
+                            updatedAt: new Date()
+                        },
+                        { merge: true }
+                    );
+                })
+                .catch((err: unknown) => console.warn("Background Firebase Storage upload notice:", err));
+        }
+
+        res.status(200).type("text/plain").send("OK");
+    } catch (err) {
+        console.error("Recording status webhook error:", err);
+        res.status(500).type("text/plain").send("Error");
+    }
+});
+
+// Helper: Dispatches SMS notification to on-duty host when a voicemail arrives
+async function notifyHostOfVoicemail(tenantId: string, eventId: string, caller: string, transcript: string) {
+    if (!tenantId) return;
+
+    let targetPhone = "";
+    if (eventId) {
+        const eventDoc = await db.collection("tenants").doc(tenantId).collection("events").doc(eventId).get();
+        if (eventDoc.exists) {
+            const data = eventDoc.data();
+            const hostUid = data?.primaryHostUid;
+            if (hostUid) {
+                const hostDoc = await db.collection("users").doc(hostUid).get();
+                if (hostDoc.exists && hostDoc.data()?.notifySmsOnMissedCalls !== false) {
+                    targetPhone = data?.primaryHostPhone || hostDoc.data()?.phoneNumber || "";
+                }
+            }
+        }
+    }
+
+    if (!targetPhone) return;
+
+    const tenantDoc = await db.collection("tenants").doc(tenantId).get();
+    const numbers = getPhoneNumbers(tenantDoc.data()?.phoneNumbers);
+    if (numbers.length === 0) return;
+
+    const sender = numbers[0];
+    const preview = transcript.length > 120 ? `${transcript.slice(0, 117)}...` : transcript;
+    const body = `[PartyLine Voicemail Alert] New message from ${caller}: "${preview}". Listen in your Call Inbox.`;
+
+    const client = getTwilioClient();
+    await client.messages.create({
+        from: sender,
+        to: targetPhone,
+        body
+    });
+}
+
+// Transcription Callback: Saves transcription text and alerts on-duty host
+app.post("/twilio/webhooks/voice/transcription", async (req: Request, res: Response) => {
+    if (!requireValidTwilioRequest(req, res)) return;
+
+    try {
+        const recordingSid = req.body.RecordingSid as string;
+        const transcriptionText = (req.body.TranscriptionText as string) || "";
+        const transcriptionStatus = (req.body.TranscriptionStatus as string) || "completed";
+        const tenantId = (req.query.tenantId as string) || "";
+        const eventId = (req.query.eventId as string) || "";
+        const caller = (req.query.caller as string) || req.body.From || "";
+
+        if (recordingSid) {
+            await db.collection("recordings").doc(recordingSid).set(
+                {
+                    transcriptionText,
+                    transcriptionStatus,
+                    updatedAt: new Date()
+                },
+                { merge: true }
+            );
+
+            if (tenantId && transcriptionText) {
+                notifyHostOfVoicemail(tenantId, eventId, caller, transcriptionText).catch((err: unknown) =>
+                    console.warn("Could not dispatch voicemail SMS notification:", err)
+                );
+            }
+        }
+
+        res.status(200).type("text/plain").send("OK");
+    } catch (err) {
+        console.error("Transcription webhook error:", err);
+        res.status(500).type("text/plain").send("Error");
+    }
+});
+
+app.post("/twilio/webhooks/voice/outbound", async (req: Request, res: Response) => {
+    // If signature validation is enforced in production, check signature
+    if (process.env.NODE_ENV === "production" && process.env.SKIP_TWILIO_VALIDATION !== "true") {
+        if (!requireValidTwilioRequest(req, res)) {
+            return;
+        }
+    }
+
+    try {
+        const to = (req.body.To || req.body.Called || "").trim();
+        const tenantId = (req.body.tenantId || "").trim();
+
+        let callerId: string | null =
+            typeof req.body.callerId === "string" && req.body.callerId.trim() ? req.body.callerId.trim() : null;
+
+        if (!callerId && tenantId) {
+            const tenantDoc = await db.collection("tenants").doc(tenantId).get();
+            const numbers = getPhoneNumbers(tenantDoc.data()?.phoneNumbers);
+            if (numbers.length > 0) {
+                callerId = numbers[0];
+            }
+        }
+
+        if (!callerId) {
+            const tenantsSnapshot = await db.collection("tenants").limit(5).get();
+            for (const doc of tenantsSnapshot.docs) {
+                const numbers = getPhoneNumbers(doc.data()?.phoneNumbers);
+                if (numbers.length > 0) {
+                    callerId = numbers[0];
+                    break;
+                }
+            }
+        }
+
+        const twiml = new twilio.twiml.VoiceResponse();
+
+        if (!callerId) {
+            console.error("No caller ID available for outbound WebRTC call");
+            twiml.say("No organization phone number configured to place this call.");
+            res.type("text/xml").send(twiml.toString());
+            return;
+        }
+
+        if (!to) {
+            twiml.say("No destination phone number was provided.");
+            res.type("text/xml").send(twiml.toString());
+            return;
+        }
+
+        const cleanTo = validateTwilioPhoneNumber(to, "to");
+        const dial = twiml.dial({
+            callerId: callerId,
+            answerOnBridge: true
+        });
+        dial.number(cleanTo);
+
+        try {
+            await db.collection("twilio_events").add({
+                type: "call",
+                sid: req.body.CallSid ?? null,
+                from: callerId,
+                to: cleanTo,
+                clientIdentity: req.body.From ?? null,
+                status: "initiated",
+                direction: "outbound-webrtc",
+                tenantId: tenantId || null,
+                receivedAt: new Date()
+            });
+        } catch (e) {
+            console.error("Failed to log outbound call event", e);
+        }
+
+        res.type("text/xml").send(twiml.toString());
+    } catch (error) {
+        console.error("Outbound voice webhook error:", error);
+        const twiml = new twilio.twiml.VoiceResponse();
+        twiml.say("An error occurred while connecting your call. Please check the number and try again.");
+        res.type("text/xml").send(twiml.toString());
+    }
 });
 
 app.post("/twilio/webhooks/sms", async (req: Request, res: Response) => {

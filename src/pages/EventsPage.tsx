@@ -357,7 +357,8 @@ export default function EventsPage() {
                             <IconBuilding className="mx-auto h-12 w-12 text-slate-600 mb-3" />
                             <h3 className="text-lg font-semibold text-white">No active organization</h3>
                             <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
-                                You need to belong to an organization before scheduling rentals and assigning duty hosts.
+                                You need to belong to an organization before scheduling rentals and assigning duty
+                                hosts.
                             </p>
                             <Link
                                 to="/account"
@@ -401,13 +402,21 @@ export default function EventsPage() {
                                                 <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs">
                                                     <div className="flex items-center gap-1.5 rounded-xl bg-emerald-950/90 border border-emerald-500/40 px-3 py-1.5 text-emerald-200">
                                                         <IconPhone className="h-3.5 w-3.5 text-emerald-400" />
-                                                        <span className="font-semibold">Primary:</span> {liveEvent.primaryName}{" "}
-                                                        <span className="font-mono text-emerald-300">({liveEvent.primaryPhone})</span>
+                                                        <span className="font-semibold">Primary:</span>{" "}
+                                                        {liveEvent.primaryName}{" "}
+                                                        <span className="font-mono text-emerald-300">
+                                                            ({liveEvent.primaryPhone})
+                                                        </span>
                                                     </div>
                                                     {liveEvent.backupName && (
                                                         <div className="flex items-center gap-1.5 rounded-xl bg-slate-800/90 border border-slate-700 px-3 py-1.5 text-slate-300">
-                                                            <span className="font-semibold text-slate-400">Backup:</span> {liveEvent.backupName}{" "}
-                                                            <span className="font-mono text-slate-400">({liveEvent.backupPhone})</span>
+                                                            <span className="font-semibold text-slate-400">
+                                                                Backup:
+                                                            </span>{" "}
+                                                            {liveEvent.backupName}{" "}
+                                                            <span className="font-mono text-slate-400">
+                                                                ({liveEvent.backupPhone})
+                                                            </span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -415,9 +424,7 @@ export default function EventsPage() {
                                         </div>
 
                                         <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800">
-                                            <span className="text-[11px] text-slate-400">
-                                                Active shift interval
-                                            </span>
+                                            <span className="text-[11px] text-slate-400">Active shift interval</span>
                                             <button
                                                 type="button"
                                                 onClick={() => setFormTarget(liveEvent)}
@@ -440,7 +447,10 @@ export default function EventsPage() {
                                             follow your organization's default fallback settings.
                                         </span>
                                     </div>
-                                    <Link to="/org/settings" className="text-blue-400 hover:text-blue-300 font-medium shrink-0">
+                                    <Link
+                                        to="/org/settings"
+                                        className="text-blue-400 hover:text-blue-300 font-medium shrink-0"
+                                    >
                                         View Fallback Settings →
                                     </Link>
                                 </div>
@@ -714,9 +724,7 @@ function EventsCalendarView({
     const isToday = (d: Date) => {
         const now = new Date();
         return (
-            d.getDate() === now.getDate() &&
-            d.getMonth() === now.getMonth() &&
-            d.getFullYear() === now.getFullYear()
+            d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
         );
     };
 
@@ -820,9 +828,7 @@ function EventsCalendarView({
                                         {item.dayNum}
                                     </span>
                                     {dayEvents.length > 0 && (
-                                        <span className="text-[10px] text-slate-400 font-mono">
-                                            {dayEvents.length}
-                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-mono">{dayEvents.length}</span>
                                     )}
                                 </div>
 
@@ -856,9 +862,7 @@ function EventsCalendarView({
                                         );
                                     })}
                                     {dayEvents.length > 3 && (
-                                        <p className="text-[9px] text-slate-400 pl-1">
-                                            +{dayEvents.length - 3} more
-                                        </p>
+                                        <p className="text-[9px] text-slate-400 pl-1">+{dayEvents.length - 3} more</p>
                                     )}
                                 </div>
                             </div>
@@ -871,7 +875,13 @@ function EventsCalendarView({
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-lg">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                        Schedule for {selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                        Schedule for{" "}
+                        {selectedDate.toLocaleDateString(undefined, {
+                            weekday: "long",
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric"
+                        })}
                     </h3>
                     <span className="text-xs text-slate-400">
                         {selectedDayEvents.length} event{selectedDayEvents.length === 1 ? "" : "s"}
@@ -911,7 +921,8 @@ function EventsCalendarView({
                                     </div>
                                     <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
                                         <span className="text-slate-300">
-                                            Host: <strong className="text-white">{e.primaryName}</strong> ({e.primaryPhone})
+                                            Host: <strong className="text-white">{e.primaryName}</strong> (
+                                            {e.primaryPhone})
                                         </span>
                                         <span className="text-blue-400 hover:underline">Edit →</span>
                                     </div>
@@ -1018,7 +1029,8 @@ function EventsAgendaView({
 
             {upcomingDays.length === 0 && activeEvents.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center text-xs text-slate-500">
-                    No upcoming events scheduled on the agenda for the next 3 weeks. Click "+ New Event / Schedule" to schedule.
+                    No upcoming events scheduled on the agenda for the next 3 weeks. Click "+ New Event / Schedule" to
+                    schedule.
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -1034,7 +1046,8 @@ function EventsAgendaView({
                             <div className="space-y-2.5">
                                 {dayGroup.events.map((e) => {
                                     const isLive = isEventCurrentlyActive(e);
-                                    const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+                                    const time = (d: Date) =>
+                                        d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
                                     return (
                                         <div
@@ -1066,14 +1079,19 @@ function EventsAgendaView({
                                                         {e.recurrence && e.recurrence !== "none" && (
                                                             <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-300">
                                                                 <IconRepeat className="h-3 w-3" />
-                                                                {e.recurrence === "daily" ? "Daily" : e.recurrence === "weekdays" ? "Mon–Fri" : "Weekly"}
+                                                                {e.recurrence === "daily"
+                                                                    ? "Daily"
+                                                                    : e.recurrence === "weekdays"
+                                                                      ? "Mon–Fri"
+                                                                      : "Weekly"}
                                                             </span>
                                                         )}
                                                     </div>
 
                                                     {(e.renterName || e.renterPhone) && (
                                                         <p className="text-xs text-slate-400 mt-0.5">
-                                                            Renter: <span className="text-slate-200">{e.renterName}</span>{" "}
+                                                            Renter:{" "}
+                                                            <span className="text-slate-200">{e.renterName}</span>{" "}
                                                             {e.renterPhone && `· ${e.renterPhone}`}
                                                         </p>
                                                     )}
@@ -1215,9 +1233,7 @@ function HostMemberSelect({
                         <div className="min-w-0">
                             <p className="truncate text-xs font-semibold text-white">{selectedName}</p>
                             <p className="truncate text-[11px] font-mono text-slate-400">
-                                {selectedPhone || (
-                                    <span className="text-amber-400">⚠️ No phone assigned</span>
-                                )}
+                                {selectedPhone || <span className="text-amber-400">⚠️ No phone assigned</span>}
                             </p>
                         </div>
                     </div>
@@ -1348,9 +1364,7 @@ function EventForm({ event, otherEvents, members, onSave, onDelete, onClose }: F
 
     const [recurrence, setRecurrence] = useState<RecurrenceType>(event?.recurrence ?? "none");
     const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
-        event?.daysOfWeek && event.daysOfWeek.length > 0
-            ? event.daysOfWeek
-            : [1]
+        event?.daysOfWeek && event.daysOfWeek.length > 0 ? event.daysOfWeek : [1]
     );
     const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>(
         event?.recurrenceEndDate ? toDateInputValue(event.recurrenceEndDate) : ""
@@ -1456,7 +1470,9 @@ function EventForm({ event, otherEvents, members, onSave, onDelete, onClose }: F
 
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">Renter / Organizer (Optional)</label>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                Renter / Organizer (Optional)
+                            </label>
                             <input
                                 className={input}
                                 placeholder="e.g. Somerville Youth League"
@@ -1465,7 +1481,9 @@ function EventForm({ event, otherEvents, members, onSave, onDelete, onClose }: F
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">Renter Phone (Optional)</label>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                Renter Phone (Optional)
+                            </label>
                             <input
                                 className={input}
                                 type="tel"

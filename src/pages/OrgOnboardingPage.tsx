@@ -211,7 +211,7 @@ export default function OrgOnboardingPage() {
             if (region.trim()) params.set("region", region.trim());
             if (postalCode.trim()) params.set("postalCode", postalCode.trim());
 
-            const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+            const apiUrl = import.meta.env.VITE_API_URL ?? "https://api.partyline.lucasbacchi.com";
             const appCheckToken = await getFirebaseAppCheckToken();
             const idToken = user ? await user.getIdToken() : "";
 

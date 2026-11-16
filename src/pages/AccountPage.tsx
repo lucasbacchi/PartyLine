@@ -48,6 +48,7 @@ export default function AccountPage() {
     const [phone, setPhone] = useState(userProfile.phoneNumber || user?.phoneNumber || "");
     const [dnd, setDnd] = useState(userProfile.doNotDisturb);
     const [smsNotify, setSmsNotify] = useState(userProfile.notifySmsOnMissedCalls);
+    const [enableWebCalls, setEnableWebCalls] = useState(userProfile.enableWebCalls !== false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
 
     useEffect(() => {
@@ -56,6 +57,7 @@ export default function AccountPage() {
         setPhone(userProfile.phoneNumber || user?.phoneNumber || "");
         setDnd(userProfile.doNotDisturb);
         setSmsNotify(userProfile.notifySmsOnMissedCalls);
+        setEnableWebCalls(userProfile.enableWebCalls !== false);
     }, [userProfile, user]);
 
     // Join org state
@@ -88,7 +90,8 @@ export default function AccountPage() {
                 email: email.trim(),
                 phoneNumber: phone.trim(),
                 doNotDisturb: dnd,
-                notifySmsOnMissedCalls: smsNotify
+                notifySmsOnMissedCalls: smsNotify,
+                enableWebCalls
             });
             showToast("Your profile and preferences have been updated.");
         } catch {
@@ -290,6 +293,36 @@ export default function AccountPage() {
                                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                                         Call & Availability Preferences
                                     </p>
+
+                                    <label className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 cursor-pointer hover:border-slate-700 transition">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-medium text-white">
+                                                    Receive Calls in Web Browser (WebRTC)
+                                                </p>
+                                                <span
+                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                                                        enableWebCalls
+                                                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                                            : "bg-slate-800 text-slate-400 border border-slate-700"
+                                                    }`}
+                                                >
+                                                    {enableWebCalls ? "Enabled" : "Off (Cell Only)"}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                Rings your desktop browser while you are actively using PartyLine. When
+                                                disabled, or when you are away/idle or have the app closed, calls
+                                                automatically route directly to your cellphone first.
+                                            </p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={enableWebCalls}
+                                            onChange={(e) => setEnableWebCalls(e.target.checked)}
+                                            className="h-4 w-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+                                        />
+                                    </label>
 
                                     <label className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 cursor-pointer hover:border-slate-700 transition">
                                         <div>

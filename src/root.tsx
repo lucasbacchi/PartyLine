@@ -4,6 +4,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { UserProvider } from "./context/UserContext";
 import { AppProvider } from "./context/AppContext";
+import { WebRTCCallProvider } from "./context/WebRTCCallContext";
 
 export const links: Route.LinksFunction = () => [
     { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
@@ -43,7 +44,9 @@ export default function App() {
     return (
         <UserProvider>
             <AppProvider>
-                <Outlet />
+                <WebRTCCallProvider>
+                    <Outlet />
+                </WebRTCCallProvider>
             </AppProvider>
         </UserProvider>
     );

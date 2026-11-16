@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { QueryDocumentSnapshot, DocumentSnapshot } from "firebase-admin/firestore";
 import { db, auth } from "../firebase.js";
 import {
     getTenantIdParam,
@@ -18,7 +19,7 @@ router.get("/", async (_req: Request, res: Response) => {
         // If system admin, option to list all tenants or user's tenants
         if (res.locals.user.admin === true && _req.query.all === "true") {
             const allTenantsSnap = await db.collection("tenants").limit(50).get();
-            const tenants = allTenantsSnap.docs.map((d) => ({
+            const tenants = allTenantsSnap.docs.map((d: QueryDocumentSnapshot) => ({
                 id: d.id,
                 ...d.data()
             }));
@@ -28,7 +29,7 @@ router.get("/", async (_req: Request, res: Response) => {
 
         // Read from user's memberships
         const membershipsSnap = await db.collection("users").doc(uid).collection("memberships").get();
-        const tenantIds = membershipsSnap.docs.map((d) => d.id);
+        const tenantIds = membershipsSnap.docs.map((d: QueryDocumentSnapshot) => d.id);
 
         if (tenantIds.length === 0) {
             res.json({ tenants: [] });
@@ -36,12 +37,12 @@ router.get("/", async (_req: Request, res: Response) => {
         }
 
         // Fetch corresponding tenant details
-        const tenantDocs = await Promise.all(tenantIds.map((id) => db.collection("tenants").doc(id).get()));
+        const tenantDocs = await Promise.all(tenantIds.map((id: string) => db.collection("tenants").doc(id).get()));
 
         const tenants = tenantDocs
-            .filter((d) => d.exists)
-            .map((d) => {
-                const membership = membershipsSnap.docs.find((m) => m.id === d.id)?.data();
+            .filter((d: DocumentSnapshot) => d.exists)
+            .map((d: DocumentSnapshot) => {
+                const membership = membershipsSnap.docs.find((m: QueryDocumentSnapshot) => m.id === d.id)?.data();
                 return {
                     id: d.id,
                     ...d.data(),
@@ -77,7 +78,13 @@ router.post("/", writeRateLimit, async (req: Request, res: Response) => {
             .toUpperCase()
             .replace(/[^A-Z]/g, "ORG")}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        const phoneNumbersList = [];
+        interface TenantPhoneNumber {
+            id: string;
+            number: string;
+            label: string;
+            isPrimary: boolean;
+        }
+        const phoneNumbersList: TenantPhoneNumber[] = [];
         if (typeof phoneNumber === "string" && phoneNumber.trim()) {
             phoneNumbersList.push({
                 id: `pn-${Date.now()}`,
@@ -241,13 +248,13 @@ router.patch("/:tenantId", requireTenantAdmin, writeRateLimit, async (req: Reque
         // If organization name changed, update user membership records
         if (updates.name) {
             const membersSnap = await db.collection("tenants").doc(tenantId).collection("members").get();
-            const memberUids = membersSnap.docs.map((d) => d.id);
+            const memberUids = membersSnap.docs.map((d: QueryDocumentSnapshot) => d.id);
             const batch = db.batch();
             for (const memberUid of memberUids) {
                 const membershipRef = db.collection("users").doc(memberUid).collection("memberships").doc(tenantId);
                 batch.set(membershipRef, { tenantName: updates.name }, { merge: true });
             }
-            await batch.commit().catch((err) => console.warn("Failed to propagate tenant name update:", err));
+            await batch.commit().catch((err: unknown) => console.warn("Failed to propagate tenant name update:", err));
         }
 
         const updatedDoc = await db.collection("tenants").doc(tenantId).get();

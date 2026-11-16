@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from "express";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import type { UserRecord } from "firebase-admin/auth";
 import { auth, db } from "../firebase.js";
 import {
     getTenantIdParam,
@@ -17,7 +19,7 @@ router.get("/", requireTenantMember, async (req: Request, res: Response) => {
         const tenantId = getTenantIdParam(req);
         const snapshot = await db.collection("tenants").doc(tenantId).collection("members").get();
 
-        const members = snapshot.docs.map((doc) => ({
+        const members = snapshot.docs.map((doc: QueryDocumentSnapshot) => ({
             uid: doc.id,
             ...doc.data()
         }));
@@ -40,7 +42,7 @@ router.post("/", requireTenantAdmin, writeRateLimit, async (req: Request, res: R
         const cleanPhone = typeof phoneNumber === "string" ? phoneNumber.trim() : undefined;
 
         let targetUid = providedUid;
-        let authUser = null;
+        let authUser: UserRecord | null = null;
 
         // 1. Resolve or create user in Firebase Auth
         if (targetUid) {

@@ -9,7 +9,8 @@ export function meta() {
         { title: "PartyLine | Smart Shared Phone Lines & Event Routing" },
         {
             name: "description",
-            content: "Share one business phone number across your entire team. Route calls dynamically to on-duty hosts and staff."
+            content:
+                "Share one business phone number across your entire team. Route calls dynamically to on-duty hosts and staff."
         }
     ];
 }

@@ -9,6 +9,8 @@ export type UserProfile = {
     phoneNumber: string;
     doNotDisturb: boolean;
     notifySmsOnMissedCalls: boolean;
+    enableWebCalls: boolean;
+    webStatus: "active" | "idle" | "offline";
 };
 
 type UserContextType = {
@@ -16,6 +18,7 @@ type UserContextType = {
     userProfile: UserProfile;
     isAuthLoading: boolean;
     updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>;
+    toggleWebCalls: () => Promise<void>;
     signOut: () => Promise<void>;
 };
 
@@ -24,7 +27,9 @@ const EMPTY_PROFILE: UserProfile = {
     email: "",
     phoneNumber: "",
     doNotDisturb: false,
-    notifySmsOnMissedCalls: true
+    notifySmsOnMissedCalls: true,
+    enableWebCalls: true,
+    webStatus: "offline"
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -53,7 +58,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     email: nextUser.email || "",
                     phoneNumber: nextUser.phoneNumber || "",
                     doNotDisturb: false,
-                    notifySmsOnMissedCalls: true
+                    notifySmsOnMissedCalls: true,
+                    enableWebCalls: true,
+                    webStatus: "active"
                 };
                 setUserProfile(initial);
 
@@ -69,7 +76,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                                 email: data.email || nextUser.email || "",
                                 phoneNumber: data.phoneNumber || nextUser.phoneNumber || "",
                                 doNotDisturb: data.doNotDisturb === true,
-                                notifySmsOnMissedCalls: data.notifySmsOnMissedCalls !== false
+                                notifySmsOnMissedCalls: data.notifySmsOnMissedCalls !== false,
+                                enableWebCalls: data.enableWebCalls !== false,
+                                webStatus: (data.webStatus as "active" | "idle" | "offline") || "active"
                             });
                         } else {
                             // Ensure the user document is created in Firestore
@@ -82,6 +91,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                                     phoneNumber: nextUser.phoneNumber || "",
                                     doNotDisturb: false,
                                     notifySmsOnMissedCalls: true,
+                                    enableWebCalls: true,
+                                    webStatus: "active",
+                                    webLastActiveAt: new Date(),
                                     createdAt: new Date()
                                 },
                                 { merge: true }
@@ -102,6 +114,80 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             if (unsubscribeDoc) unsubscribeDoc();
         };
     }, []);
+
+    // Presence & Idle Activity Tracker
+    useEffect(() => {
+        if (!user || typeof window === "undefined") return;
+
+        let lastActiveTime = Date.now();
+        let currentStatus: "active" | "idle" | "offline" = "active";
+        const uid = user.uid;
+
+        const updateFirestoreStatus = (status: "active" | "idle" | "offline") => {
+            currentStatus = status;
+            const userDocRef = doc(db, "users", uid);
+            setDoc(
+                userDocRef,
+                {
+                    webStatus: status,
+                    webLastActiveAt: new Date()
+                },
+                { merge: true }
+            ).catch(() => {});
+        };
+
+        // Report active presence immediately on mount
+        updateFirestoreStatus("active");
+
+        const handleUserActivity = () => {
+            lastActiveTime = Date.now();
+            if (currentStatus !== "active") {
+                updateFirestoreStatus("active");
+            }
+        };
+
+        const activityEvents = ["mousemove", "keydown", "click", "touchstart", "scroll"] as const;
+        activityEvents.forEach((evt) => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "hidden") {
+                // If tab is placed in background, mark idle
+                updateFirestoreStatus("idle");
+            } else {
+                lastActiveTime = Date.now();
+                updateFirestoreStatus("active");
+            }
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        const handleBeforeUnload = () => {
+            updateFirestoreStatus("offline");
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        // Heartbeat timer every 45 seconds to refresh presence & catch idle state (> 3 minutes)
+        const heartbeatInterval = setInterval(() => {
+            const idleThreshold = 3 * 60 * 1000; // 3 minutes
+            const isInactive = Date.now() - lastActiveTime > idleThreshold;
+            const isHidden = document.visibilityState === "hidden";
+
+            if (isInactive || isHidden) {
+                if (currentStatus !== "idle") {
+                    updateFirestoreStatus("idle");
+                }
+            } else {
+                updateFirestoreStatus("active");
+            }
+        }, 45000);
+
+        return () => {
+            clearInterval(heartbeatInterval);
+            activityEvents.forEach((evt) => window.removeEventListener(evt, handleUserActivity));
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+            updateFirestoreStatus("offline");
+        };
+    }, [user?.uid]);
 
     const updateUserProfile = async (profile: Partial<UserProfile>) => {
         if (!user) throw new Error("Must be signed in to update profile.");
@@ -125,6 +211,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         setUserProfile((prev) => ({ ...prev, ...profile }));
     };
 
+    const toggleWebCalls = async () => {
+        const nextVal = !userProfile.enableWebCalls;
+        await updateUserProfile({
+            enableWebCalls: nextVal,
+            webStatus: nextVal ? "active" : "offline"
+        });
+    };
+
     const signOut = async () => {
         await fbSignOut(auth);
         setUser(null);
@@ -138,6 +232,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 userProfile,
                 isAuthLoading,
                 updateUserProfile,
+                toggleWebCalls,
                 signOut
             }}
         >

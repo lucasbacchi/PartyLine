@@ -34,6 +34,7 @@ export type OrgSettings = {
     smsAutoReplyEnabled: boolean;
     smsAutoReplyMessage: string;
     timezone: string;
+    enableWebCalls?: boolean;
 };
 
 export type OrgMember = {
@@ -121,6 +122,7 @@ type AppContextType = {
     userProfile: UserProfile;
     isAuthLoading: boolean;
     updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>;
+    toggleWebCalls: () => Promise<void>;
 };
 
 const DEFAULT_SETTINGS: OrgSettings = {
@@ -132,13 +134,14 @@ const DEFAULT_SETTINGS: OrgSettings = {
     smsAutoReplyEnabled: true,
     smsAutoReplyMessage:
         "Thank you for reaching out to PartyLine! A host on duty has received your message and will reply shortly.",
-    timezone: "America/New_York"
+    timezone: "America/New_York",
+    enableWebCalls: true
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-    const { user, userProfile, isAuthLoading, updateUserProfile } = useUser();
+    const { user, userProfile, isAuthLoading, updateUserProfile, toggleWebCalls } = useUser();
 
     const [currentTenant, setCurrentTenant] = useState<TenantInfo | null>(null);
     const [tenants, setTenants] = useState<Array<{ id: string; name: string; role: TenantRole }>>([]);
@@ -800,7 +803,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 user,
                 userProfile,
                 isAuthLoading,
-                updateUserProfile
+                updateUserProfile,
+                toggleWebCalls
             }}
         >
             {children}

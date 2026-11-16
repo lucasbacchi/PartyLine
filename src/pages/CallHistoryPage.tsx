@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useApp } from "../context/AppContext";
+import { useWebRTCCall } from "../context/WebRTCCallContext";
 import { db } from "../firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import { fetchTwilioCalls, sendTwilioText, formatHistoryTimestamp, type TwilioCallHistoryItem } from "../twilioHistory";
@@ -13,7 +14,7 @@ import {
     IconUser,
     IconSearch,
     IconCheckCircle,
-    IconClock
+    IconMicrophone
 } from "../components/Icons";
 
 export function meta() {
@@ -50,6 +51,7 @@ function formatDayLabel(dateString: string | null): string {
 
 export default function CallHistoryPage() {
     const { currentTenant, isLoadingTenants, user, members } = useApp();
+    const { startCall } = useWebRTCCall();
     const [calls, setCalls] = useState<TwilioCallHistoryItem[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -162,13 +164,18 @@ export default function CallHistoryPage() {
         return undefined;
     };
 
-    // Filter calls by search
+    // Filter calls by search (including transcripts and voicemails)
     const filteredCalls = useMemo(() => {
         if (!searchQuery.trim()) return calls;
         const q = searchQuery.toLowerCase();
         return calls.filter(
             (c) =>
-                c.from.toLowerCase().includes(q) || c.to.toLowerCase().includes(q) || c.status.toLowerCase().includes(q)
+                c.from.toLowerCase().includes(q) ||
+                c.to.toLowerCase().includes(q) ||
+                c.status.toLowerCase().includes(q) ||
+                (c.transcriptionText && c.transcriptionText.toLowerCase().includes(q)) ||
+                (c.isVoicemail && "voicemail".includes(q)) ||
+                (c.recordingUrl && "recording".includes(q))
         );
     }, [calls, searchQuery]);
 
@@ -367,7 +374,7 @@ export default function CallHistoryPage() {
                     </div>
                 ) : viewMode === "caller" ? (
                     /* BY CALLER VIEW */
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-[560px]">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-140">
                         {/* Callers Sidebar */}
                         <div className="lg:col-span-4 rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden flex flex-col shadow-xl">
                             <div className="border-b border-slate-800 p-3 bg-slate-950/60 flex items-center justify-between">
@@ -375,7 +382,7 @@ export default function CallHistoryPage() {
                                     Callers ({callerThreads.length})
                                 </span>
                             </div>
-                            <div className="divide-y divide-slate-800/60 overflow-y-auto max-h-[580px] flex-1">
+                            <div className="divide-y divide-slate-800/60 overflow-y-auto max-h-145 flex-1">
                                 {callerThreads.map((thread) => {
                                     const isSelected = selectedCaller === thread.callerNumber;
                                     const name = thread.contactName;
@@ -453,18 +460,24 @@ export default function CallHistoryPage() {
                                         </div>
 
                                         {/* Call Back Button */}
-                                        <a
-                                            href={`tel:${activeCallerThread.callerNumber}`}
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                startCall(
+                                                    activeCallerThread.callerNumber,
+                                                    activeCallerThread.contactName
+                                                )
+                                            }
                                             className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition shadow-lg shadow-emerald-600/20"
-                                            title={`Call back ${activeCallerThread.callerNumber}`}
+                                            title={`Call back ${activeCallerThread.callerNumber} from organization number`}
                                         >
                                             <IconPhone className="h-4 w-4" />
                                             Call Back Now
-                                        </a>
+                                        </button>
                                     </div>
 
                                     {/* Call Logs Stream */}
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[420px] min-h-[300px] bg-slate-950/40 divide-y divide-slate-800/40">
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-105 min-h-75 bg-slate-950/40 divide-y divide-slate-800/40">
                                         {activeCallerCalls.map((call) => {
                                             const matchedEvent = findMatchingEvent(
                                                 events,
@@ -517,6 +530,43 @@ export default function CallHistoryPage() {
                                                             )}
                                                         </div>
                                                     </div>
+
+                                                    {/* Voicemail or Call Recording Audio Player */}
+                                                    {call.recordingUrl && (
+                                                        <div className="mt-2.5 rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+                                                            <div className="flex items-center justify-between text-xs text-purple-300 font-semibold mb-1.5">
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <IconMicrophone className="h-3.5 w-3.5 text-purple-400" />
+                                                                    {call.isVoicemail
+                                                                        ? "PartyLine Voicemail"
+                                                                        : "Call Recording"}
+                                                                </span>
+                                                                {call.recordingDuration && (
+                                                                    <span className="font-mono text-[11px] text-slate-400">
+                                                                        {call.recordingDuration}s
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <audio
+                                                                controls
+                                                                preload="metadata"
+                                                                className="w-full h-8 accent-purple-500 rounded"
+                                                            >
+                                                                <source src={call.recordingUrl} type="audio/mpeg" />
+                                                                Your browser does not support the audio element.
+                                                            </audio>
+                                                            {call.transcriptionText && (
+                                                                <div className="mt-2 pt-2 border-t border-purple-500/10">
+                                                                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                                                                        Voicemail Transcript:
+                                                                    </p>
+                                                                    <p className="text-xs text-slate-200 italic mt-0.5 font-sans leading-relaxed">
+                                                                        "{call.transcriptionText}"
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -617,6 +667,10 @@ export default function CallHistoryPage() {
                                                     const partnerPhone = isInbound ? call.from : call.to;
                                                     const partnerName = resolveContactName(partnerPhone);
                                                     const isReplyingInline = activeInlineSmsId === call.sid;
+                                                    const matchedEvent = findMatchingEvent(
+                                                        events,
+                                                        call.createdAt || call.startedAt
+                                                    );
 
                                                     return (
                                                         <div
@@ -660,14 +714,21 @@ export default function CallHistoryPage() {
 
                                                                     {/* Action buttons: Call Back & Send SMS */}
                                                                     <div className="flex items-center gap-2 pt-1">
-                                                                        <a
-                                                                            href={`tel:${partnerPhone}`}
-                                                                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition"
-                                                                            title={`Call back ${partnerPhone}`}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                startCall(
+                                                                                    partnerPhone,
+                                                                                    undefined,
+                                                                                    matchedEvent?.title
+                                                                                )
+                                                                            }
+                                                                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition cursor-pointer"
+                                                                            title={`Call back ${partnerPhone} from organization number`}
                                                                         >
                                                                             <IconPhone className="h-3 w-3" />
                                                                             Call Back
-                                                                        </a>
+                                                                        </button>
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
@@ -686,6 +747,46 @@ export default function CallHistoryPage() {
                                                                     </div>
                                                                 </div>
                                                             </div>
+
+                                                            {/* Voicemail or Call Recording Audio Player */}
+                                                            {call.recordingUrl && (
+                                                                <div className="mt-3 rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+                                                                    <div className="flex items-center justify-between text-xs text-purple-300 font-semibold mb-1.5">
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            <IconMicrophone className="h-3.5 w-3.5 text-purple-400" />
+                                                                            {call.isVoicemail
+                                                                                ? "PartyLine Voicemail"
+                                                                                : "Call Recording"}
+                                                                        </span>
+                                                                        {call.recordingDuration && (
+                                                                            <span className="font-mono text-[11px] text-slate-400">
+                                                                                {call.recordingDuration}s
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <audio
+                                                                        controls
+                                                                        preload="metadata"
+                                                                        className="w-full h-8 accent-purple-500 rounded"
+                                                                    >
+                                                                        <source
+                                                                            src={call.recordingUrl}
+                                                                            type="audio/mpeg"
+                                                                        />
+                                                                        Your browser does not support the audio element.
+                                                                    </audio>
+                                                                    {call.transcriptionText && (
+                                                                        <div className="mt-2 pt-2 border-t border-purple-500/10">
+                                                                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                                                                                Voicemail Transcript:
+                                                                            </p>
+                                                                            <p className="text-xs text-slate-200 italic mt-0.5 font-sans leading-relaxed">
+                                                                                "{call.transcriptionText}"
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
 
                                                             {/* Inline SMS Reply Box */}
                                                             {isReplyingInline && (

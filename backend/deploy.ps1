@@ -1,7 +1,7 @@
 param(
     [string]$Project = $(if ($env:GCP_PROJECT) { $env:GCP_PROJECT } else { "partyline-phone-system" }),
     [string]$Service = $(if ($env:CLOUD_RUN_SERVICE) { $env:CLOUD_RUN_SERVICE } else { "partyline-api" }),
-    [string]$AllowedOrigins = $(if ($env:ALLOWED_ORIGINS) { $env:ALLOWED_ORIGINS } else { "https://partyline.lucasbacchi.com,http://localhost:5173" })
+    [string]$AllowedOrigins = $(if ($env:ALLOWED_ORIGINS) { $env:ALLOWED_ORIGINS } else { "https://partyline.lucasbacchi.com,https://api.partyline.lucasbacchi.com,http://localhost:5173,http://localhost:5174" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,13 +16,35 @@ $backendPath = (Resolve-Path $PSScriptRoot).Path
 Write-Host "Deploying $Service to Cloud Run in $Region ($Project)..."
 Push-Location $backendPath
 try {
+    $envVars = @()
+    if (Test-Path ".env") {
+        Get-Content ".env" | ForEach-Object {
+            $line = $_.Trim()
+            if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+                $varName = ($line.Split("=")[0]).Trim()
+                if ($varName -notin @("PORT", "K_SERVICE", "K_REVISION", "K_CONFIGURATION")) {
+                    $envVars += $line
+                }
+            }
+        }
+    }
+
+    if (-not ($envVars -match "^ALLOWED_ORIGINS=")) {
+        $envVars += "ALLOWED_ORIGINS=$AllowedOrigins"
+    }
+    if (-not ($envVars -match "^PUBLIC_BASE_URL=")) {
+        $envVars += "PUBLIC_BASE_URL=https://api.partyline.lucasbacchi.com"
+    }
+
+    $envVarArg = "^||^" + ($envVars -join "||")
+
     gcloud run deploy $Service `
         --source . `
         --project $Project `
         --region $Region `
         --platform managed `
         --allow-unauthenticated `
-        --set-env-vars "^||^ALLOWED_ORIGINS=$AllowedOrigins"
+        --set-env-vars $envVarArg
 } finally {
     Pop-Location
 }

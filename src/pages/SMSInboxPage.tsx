@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useApp } from "../context/AppContext";
+import { useWebRTCCall } from "../context/WebRTCCallContext";
 import { db } from "../firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import { fetchTwilioTexts, sendTwilioText, formatHistoryTimestamp, type TwilioTextHistoryItem } from "../twilioHistory";
@@ -49,6 +50,7 @@ function formatDayLabel(dateString: string | null): string {
 
 export default function SMSInbox() {
     const { currentTenant, isLoadingTenants, user, members } = useApp();
+    const { startCall } = useWebRTCCall();
     const [messages, setMessages] = useState<TwilioTextHistoryItem[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -375,7 +377,7 @@ export default function SMSInbox() {
                     </div>
                 ) : viewMode === "sender" ? (
                     /* SENDER / THREADED CONVERSATION VIEW */
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-[560px]">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-140">
                         {/* Threads Sidebar */}
                         <div className="lg:col-span-4 rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden flex flex-col shadow-xl">
                             <div className="border-b border-slate-800 p-3 bg-slate-950/60 flex items-center justify-between">
@@ -383,7 +385,7 @@ export default function SMSInbox() {
                                     Conversations ({threads.length})
                                 </span>
                             </div>
-                            <div className="divide-y divide-slate-800/60 overflow-y-auto max-h-[580px] flex-1">
+                            <div className="divide-y divide-slate-800/60 overflow-y-auto max-h-145 flex-1">
                                 {threads.map((thread) => {
                                     const isSelected = selectedContact === thread.contactNumber;
                                     const name = thread.contactName;
@@ -457,18 +459,21 @@ export default function SMSInbox() {
                                         </div>
 
                                         {/* Call Back Button */}
-                                        <a
-                                            href={`tel:${activeThread.contactNumber}`}
-                                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 px-3.5 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30 transition shadow"
-                                            title={`Call back ${activeThread.contactNumber}`}
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                startCall(activeThread.contactNumber, activeThread.contactName)
+                                            }
+                                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 px-3.5 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30 transition shadow cursor-pointer"
+                                            title={`Call back ${activeThread.contactNumber} from organization number`}
                                         >
                                             <IconPhone className="h-3.5 w-3.5" />
-                                            Call Back
-                                        </a>
+                                            Call Back (WebRTC)
+                                        </button>
                                     </div>
 
                                     {/* Messages Bubbles Stream */}
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 max-h-[460px] min-h-[320px] bg-slate-950/40">
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 max-h-115 min-h-80 bg-slate-950/40">
                                         {activeThreadMessages.map((msg) => {
                                             const isOutbound = msg.direction !== "inbound";
                                             const matchedEvent = findMatchingEvent(events, msg.sentAt || msg.createdAt);
@@ -602,6 +607,10 @@ export default function SMSInbox() {
                                                     const partnerPhone = isOutbound ? msg.to : msg.from;
                                                     const partnerName = resolveContactName(partnerPhone);
                                                     const isReplyingInline = activeInlineReplyId === msg.sid;
+                                                    const matchedEvent = findMatchingEvent(
+                                                        events,
+                                                        msg.sentAt || msg.createdAt
+                                                    );
 
                                                     return (
                                                         <div
@@ -640,14 +649,21 @@ export default function SMSInbox() {
 
                                                                     {/* Action buttons: Call Back & Reply */}
                                                                     <div className="flex items-center gap-2 pt-1">
-                                                                        <a
-                                                                            href={`tel:${partnerPhone}`}
-                                                                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition"
-                                                                            title={`Call ${partnerPhone}`}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                startCall(
+                                                                                    partnerPhone,
+                                                                                    undefined,
+                                                                                    matchedEvent?.title
+                                                                                )
+                                                                            }
+                                                                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition cursor-pointer"
+                                                                            title={`Call ${partnerPhone} from organization number`}
                                                                         >
                                                                             <IconPhone className="h-3 w-3" />
                                                                             Call Back
-                                                                        </a>
+                                                                        </button>
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
