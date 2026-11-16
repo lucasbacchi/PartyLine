@@ -1203,6 +1203,18 @@ export default function OrgOnboardingPage() {
                                                     Add
                                                 </button>
                                             </div>
+                                            <p className="text-[11px] text-slate-500 col-span-full">
+                                                Member phone numbers receive duty call transfers and transactional SMS
+                                                alerts subject to our{" "}
+                                                <Link
+                                                    to="/sms-terms"
+                                                    target="_blank"
+                                                    className="text-blue-400 underline hover:text-blue-300"
+                                                >
+                                                    SMS Terms
+                                                </Link>
+                                                . Msg & data rates may apply; reply STOP to cancel.
+                                            </p>
                                         </div>
 
                                         {/* Pending Members List */}

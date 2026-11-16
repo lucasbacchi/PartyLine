@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { useUser } from "../context/UserContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { IconShield, IconLock, IconPhone, IconCheckCircle } from "../components/Icons";
 
 const STEPS = [
     {
@@ -144,6 +145,78 @@ export default function HomePage() {
                             </li>
                         ))}
                     </ol>
+                </section>
+
+                {/* Trust, Security & Project Context Section */}
+                <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
+                    <div className="rounded-3xl border border-slate-800 bg-linear-to-b from-slate-900/80 to-slate-950 p-8 sm:p-12">
+                        <div className="max-w-2xl">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400">
+                                <IconShield className="h-3.5 w-3.5" />
+                                <span>Wentworth Senior Capstone Project</span>
+                            </span>
+                            <h2 className="mt-4 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                                Built for facility rentals, shared duty shifts, and two-way SMS proxying.
+                            </h2>
+                            <p className="mt-3 text-sm sm:text-base text-slate-400 leading-relaxed">
+                                When community members or renters book a space, they text or call one organization
+                                number. PartyLine acts as an SMS and call proxy—forwarding inquiries to whoever is on
+                                duty, and letting staff text back without revealing anyone&apos;s personal cell number.
+                            </p>
+                        </div>
+
+                        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600/15 text-blue-400 mb-4">
+                                    <IconPhone className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-white text-base">SMS Proxy for Renters</h3>
+                                <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                                    Renters provide their number when booking a space to receive access codes and answer
+                                    questions. When they text the organization, on-duty staff can text right back
+                                    through PartyLine.
+                                </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-600/15 text-indigo-400 mb-4">
+                                    <IconLock className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-white text-base">Personal Numbers Stay Private</h3>
+                                <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                                    Renters only see the organization&apos;s public phone number, and student staff
+                                    never have to give out their personal mobile numbers to the public.
+                                </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-600/15 text-emerald-400 mb-4">
+                                    <IconCheckCircle className="h-5 w-5" />
+                                </div>
+                                <h3 className="font-semibold text-white text-base">10DLC Compliant & Zero Spam</h3>
+                                <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                                    We never share or sell mobile phone numbers. Messages are strictly transactional for
+                                    space rentals and shift duties. Renters can reply{" "}
+                                    <strong className="text-white">STOP</strong> to opt out anytime.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
+                            <span>Questions about our SMS proxy, terms, or privacy policy?</span>
+                            <div className="flex items-center gap-4">
+                                <Link to="/privacy" className="text-blue-400 hover:underline">
+                                    Privacy Policy →
+                                </Link>
+                                <Link to="/terms" className="text-blue-400 hover:underline">
+                                    Terms of Service →
+                                </Link>
+                                <Link to="/sms-terms" className="text-blue-400 hover:underline">
+                                    SMS Terms & Opt-Out →
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </main>
 

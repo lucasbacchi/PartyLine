@@ -277,7 +277,12 @@ export default function AccountPage() {
                                     </div>
                                     <p className="mt-1 text-[11px] text-slate-400">
                                         When you are on duty for an event, PartyLine rings this personal number without
-                                        revealing it to renters.
+                                        revealing it to callers. Also used for operational SMS notifications subject to
+                                        our{" "}
+                                        <Link to="/sms-terms" className="text-blue-400 underline hover:text-blue-300">
+                                            SMS Terms
+                                        </Link>{" "}
+                                        (Reply STOP to cancel, HELP for help).
                                     </p>
                                 </div>
 

@@ -9,6 +9,11 @@ export default [
     route("org/settings", "pages/OrgSettingsPage.tsx"),
     route("org/new", "pages/OrgOnboardingPage.tsx"),
     route("account", "pages/AccountPage.tsx"),
+    route("privacy", "pages/PrivacyPolicyPage.tsx"),
+    route("terms", "pages/TermsOfServicePage.tsx"),
+    route("sms-terms", "pages/SmsTermsPage.tsx"),
+    route("opt-out", "pages/OptOutPage.tsx"),
+    route("contact", "pages/ContactPage.tsx"),
     route("admin/debug", "pages/AdminDebugPage.tsx"),
     route("*?", "pages/404Page.tsx")
 ] satisfies RouteConfig;

@@ -506,6 +506,20 @@ export default function LoginPage() {
                                         ? "Create Organization & Account"
                                         : "Complete Registration"}
                             </button>
+
+                            {authMode === "signup" && (
+                                <p className="text-center text-[11px] text-slate-400">
+                                    By registering, you agree to our{" "}
+                                    <Link to="/terms" className="text-blue-400 underline hover:text-blue-300">
+                                        Terms of Service
+                                    </Link>{" "}
+                                    and{" "}
+                                    <Link to="/privacy" className="text-blue-400 underline hover:text-blue-300">
+                                        Privacy Policy
+                                    </Link>
+                                    .
+                                </p>
+                            )}
                         </form>
 
                         {/* Phone Authentication Section */}
@@ -515,22 +529,37 @@ export default function LoginPage() {
                             </p>
 
                             {!phoneVerificationStep ? (
-                                <div className="flex gap-2">
-                                    <input
-                                        type="tel"
-                                        value={phoneNumber}
-                                        onChange={(e) => setPhoneNumber(e.target.value)}
-                                        placeholder="+19785550142"
-                                        className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleSendPhoneCode}
-                                        disabled={isLoading}
-                                        className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition disabled:opacity-50"
-                                    >
-                                        Send Code
-                                    </button>
+                                <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="tel"
+                                            value={phoneNumber}
+                                            onChange={(e) => setPhoneNumber(e.target.value)}
+                                            placeholder="+19785550142"
+                                            className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleSendPhoneCode}
+                                            disabled={isLoading}
+                                            className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition disabled:opacity-50"
+                                        >
+                                            Send Code
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 leading-normal">
+                                        By requesting an SMS code, you consent to receive an automated verification text
+                                        from PartyLine. Message frequency varies. Msg & data rates may apply. Reply STOP
+                                        to cancel or HELP for help. View our{" "}
+                                        <Link to="/sms-terms" className="text-blue-400 underline hover:text-blue-300">
+                                            SMS Terms
+                                        </Link>{" "}
+                                        and{" "}
+                                        <Link to="/privacy" className="text-blue-400 underline hover:text-blue-300">
+                                            Privacy Policy
+                                        </Link>
+                                        . Mobile info is never sold or shared for marketing.
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="space-y-2">

@@ -610,6 +610,17 @@ export default function OrgUsersPage() {
                                 placeholder="+16175550182"
                                 className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                             />
+                            <p className="mt-1.5 text-[11px] text-slate-400 leading-normal">
+                                Enables duty shift call forwarding and transactional SMS alerts under our{" "}
+                                <Link
+                                    to="/sms-terms"
+                                    target="_blank"
+                                    className="text-blue-400 underline hover:text-blue-300"
+                                >
+                                    SMS Terms
+                                </Link>{" "}
+                                (Msg & data rates may apply; reply STOP to opt out anytime).
+                            </p>
                         </div>
 
                         <div>
