@@ -1,11 +1,22 @@
 import { useMemo, useState, useEffect, type SyntheticEvent } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import { useApp } from "../context/AppContext";
+import { useApp, type OrgMember } from "../context/AppContext";
 import { db } from "../firebase";
 import { collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { Link } from "react-router";
-import { IconBuilding, IconPlus } from "../components/Icons";
+import {
+    IconBuilding,
+    IconPlus,
+    IconRepeat,
+    IconSearch,
+    IconClock,
+    IconCheck,
+    IconUser,
+    IconTrash
+} from "../components/Icons";
+
+export type RecurrenceType = "none" | "daily" | "weekly" | "weekdays";
 
 export type Event = {
     id: string;
@@ -14,18 +25,78 @@ export type Event = {
     renterPhone: string;
     start: Date;
     end: Date;
+    primaryUid?: string;
     primaryName: string;
     primaryPhone: string;
+    backupUid?: string;
     backupName: string;
     backupPhone: string;
+    recurrence?: RecurrenceType;
+    daysOfWeek?: number[];
+    recurrenceEndDate?: Date | null;
 };
 
 type Filter = "upcoming" | "past" | "all";
 type Status = "active" | "upcoming" | "past";
 
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function isEventCurrentlyActive(e: Event, now: Date = new Date()): boolean {
+    const recurrence = e.recurrence || "none";
+    if (recurrence === "none") {
+        return now >= e.start && now <= e.end;
+    }
+
+    if (e.recurrenceEndDate) {
+        const endOfDay = new Date(e.recurrenceEndDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (now > endOfDay) return false;
+    }
+
+    const startDay = new Date(e.start);
+    startDay.setHours(0, 0, 0, 0);
+    if (now < startDay) return false;
+
+    const dayOfWeek = now.getDay();
+    if (recurrence === "weekly") {
+        const days = Array.isArray(e.daysOfWeek) ? e.daysOfWeek : [];
+        if (!days.includes(dayOfWeek)) return false;
+    } else if (recurrence === "weekdays") {
+        if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+    }
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const startMinutes = e.start.getHours() * 60 + e.start.getMinutes();
+    const endMinutes = e.end.getHours() * 60 + e.end.getMinutes();
+
+    if (endMinutes >= startMinutes) {
+        return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    } else {
+        return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+    }
+}
+
+export function findMatchingEvent(events: Event[], timestamp: string | null): Event | undefined {
+    if (!timestamp) return undefined;
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return undefined;
+    return events.find((e) => isEventCurrentlyActive(e, date));
+}
+
 function getStatus(e: Event): Status {
     const now = new Date();
-    if (now >= e.start && now <= e.end) return "active";
+    if (isEventCurrentlyActive(e, now)) return "active";
+
+    const recurrence = e.recurrence || "none";
+    if (recurrence !== "none") {
+        if (e.recurrenceEndDate) {
+            const endOfDay = new Date(e.recurrenceEndDate);
+            endOfDay.setHours(23, 59, 59, 999);
+            return now > endOfDay ? "past" : "upcoming";
+        }
+        return "upcoming";
+    }
+
     return now < e.start ? "upcoming" : "past";
 }
 
@@ -39,10 +110,42 @@ function formatRange(start: Date, end: Date) {
     return `${day} · ${time(start)} – ${time(end)}`;
 }
 
-// turns a date into the string for the datetime input
+function formatScheduleDescription(e: Event): string {
+    const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const timeStr = `${time(e.start)} – ${time(e.end)}`;
+    const recurrence = e.recurrence || "none";
+
+    if (recurrence === "none") {
+        return formatRange(e.start, e.end);
+    }
+
+    const untilStr = e.recurrenceEndDate
+        ? ` · Until ${e.recurrenceEndDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+        : "";
+
+    if (recurrence === "daily") {
+        return `Repeats Daily · ${timeStr}${untilStr}`;
+    }
+    if (recurrence === "weekdays") {
+        return `Repeats Mon–Fri · ${timeStr}${untilStr}`;
+    }
+    if (recurrence === "weekly") {
+        const days = (e.daysOfWeek || []).map((d) => DAY_NAMES[d]).join(", ") || "Weekly";
+        return `Weekly on ${days} · ${timeStr}${untilStr}`;
+    }
+    return formatRange(e.start, e.end);
+}
+
+// turns a date into the string for datetime input
 function toInputValue(d: Date) {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// turns a date into YYYY-MM-DD
+function toDateInputValue(d: Date) {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 const digitsOnly = (s: string) => s.replace(/\D/g, "");
@@ -54,7 +157,7 @@ const statusStyle: Record<Status, string> = {
 };
 
 export default function EventsPage() {
-    const { currentTenant } = useApp();
+    const { currentTenant, members } = useApp();
     const [events, setEvents] = useState<Event[]>([]);
     const [filter, setFilter] = useState<Filter>("all");
     const [formTarget, setFormTarget] = useState<Event | "new" | null>(null);
@@ -78,6 +181,11 @@ export default function EventsPage() {
                     const data = docSnap.data();
                     const startDate = data.start?.toDate ? data.start.toDate() : new Date(data.start);
                     const endDate = data.end?.toDate ? data.end.toDate() : new Date(data.end);
+                    const recEnd = data.recurrenceEndDate?.toDate
+                        ? data.recurrenceEndDate.toDate()
+                        : data.recurrenceEndDate
+                          ? new Date(data.recurrenceEndDate)
+                          : null;
 
                     return {
                         id: docSnap.id,
@@ -86,10 +194,15 @@ export default function EventsPage() {
                         renterPhone: data.renterPhone || "",
                         start: startDate,
                         end: endDate,
+                        primaryUid: data.primaryUid || undefined,
                         primaryName: data.primaryName || "",
                         primaryPhone: data.primaryPhone || "",
+                        backupUid: data.backupUid || undefined,
                         backupName: data.backupName || "",
-                        backupPhone: data.backupPhone || ""
+                        backupPhone: data.backupPhone || "",
+                        recurrence: (data.recurrence as RecurrenceType) || "none",
+                        daysOfWeek: Array.isArray(data.daysOfWeek) ? data.daysOfWeek : [],
+                        recurrenceEndDate: recEnd
                     };
                 });
 
@@ -106,7 +219,12 @@ export default function EventsPage() {
     }, [currentTenant?.id]);
 
     const visible = useMemo(() => {
-        const sorted = [...events].sort((a, b) => a.start.getTime() - b.start.getTime());
+        const sorted = [...events].sort((a, b) => {
+            const aActive = isEventCurrentlyActive(a) ? 1 : 0;
+            const bActive = isEventCurrentlyActive(b) ? 1 : 0;
+            if (aActive !== bActive) return bActive - aActive;
+            return a.start.getTime() - b.start.getTime();
+        });
         if (filter === "all") return sorted;
         return sorted.filter((e) => (filter === "past" ? getStatus(e) === "past" : getStatus(e) !== "past"));
     }, [events, filter]);
@@ -121,10 +239,15 @@ export default function EventsPage() {
             renterPhone: data.renterPhone,
             start: data.start,
             end: data.end,
+            primaryUid: data.primaryUid || null,
             primaryName: data.primaryName,
             primaryPhone: data.primaryPhone,
+            backupUid: data.backupUid || null,
             backupName: data.backupName,
             backupPhone: data.backupPhone,
+            recurrence: data.recurrence || "none",
+            daysOfWeek: data.daysOfWeek || [],
+            recurrenceEndDate: data.recurrenceEndDate || null,
             updatedAt: new Date()
         };
 
@@ -228,15 +351,28 @@ export default function EventsPage() {
                                                 }`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <h2 className="text-lg font-semibold text-white">{e.title}</h2>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <h2 className="text-lg font-semibold text-white">{e.title}</h2>
+                                                        {e.recurrence && e.recurrence !== "none" && (
+                                                            <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-xs font-semibold text-purple-300">
+                                                                <IconRepeat className="h-3 w-3" />
+                                                                {e.recurrence === "daily"
+                                                                    ? "Daily"
+                                                                    : e.recurrence === "weekdays"
+                                                                      ? "Mon–Fri"
+                                                                      : "Weekly"}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span
                                                         className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase ${statusStyle[status]}`}
                                                     >
                                                         {status}
                                                     </span>
                                                 </div>
-                                                <p className="mt-1 text-xs text-slate-400">
-                                                    {formatRange(e.start, e.end)}
+                                                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-300">
+                                                    <IconClock className="h-3.5 w-3.5 text-slate-400" />
+                                                    {formatScheduleDescription(e)}
                                                 </p>
                                                 {(e.renterName || e.renterPhone) && (
                                                     <p className="mt-1 text-xs text-slate-400">
@@ -297,6 +433,7 @@ export default function EventsPage() {
                     <EventForm
                         event={formTarget === "new" ? null : formTarget}
                         otherEvents={events.filter((e) => formTarget === "new" || e.id !== formTarget.id)}
+                        members={members}
                         onSave={saveEvent}
                         onDelete={deleteEvent}
                         onClose={() => setFormTarget(null)}
@@ -308,25 +445,259 @@ export default function EventsPage() {
     );
 }
 
+function HostMemberSelect({
+    label,
+    selectedUid,
+    selectedName,
+    selectedPhone,
+    onChange,
+    members,
+    excludeUid,
+    isOptional = false
+}: {
+    label: string;
+    selectedUid?: string;
+    selectedName: string;
+    selectedPhone: string;
+    onChange: (member: { uid?: string; name: string; phone: string }) => void;
+    members: OrgMember[];
+    excludeUid?: string;
+    isOptional?: boolean;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    const [isCustomMode, setIsCustomMode] = useState(Boolean(selectedName && !selectedUid));
+
+    const availableMembers = useMemo(() => {
+        return members.filter((m) => {
+            if (excludeUid && m.uid === excludeUid) return false;
+            if (!search.trim()) return true;
+            const q = search.toLowerCase();
+            return (
+                m.displayName.toLowerCase().includes(q) ||
+                m.email.toLowerCase().includes(q) ||
+                (m.phoneNumber && m.phoneNumber.includes(q))
+            );
+        });
+    }, [members, excludeUid, search]);
+
+    if (isCustomMode) {
+        return (
+            <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-300">{label} (Custom Host)</p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsCustomMode(false);
+                            onChange({ uid: undefined, name: "", phone: "" });
+                        }}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 font-medium"
+                    >
+                        Pick from Team
+                    </button>
+                </div>
+                <input
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none text-sm"
+                    placeholder="Full name"
+                    value={selectedName}
+                    onChange={(e) => onChange({ uid: undefined, name: e.target.value, phone: selectedPhone })}
+                />
+                <input
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                    type="tel"
+                    placeholder="Phone number (+16175550142)"
+                    value={selectedPhone}
+                    onChange={(e) => onChange({ uid: undefined, name: selectedName, phone: e.target.value })}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-300">
+                    {label} {isOptional && <span className="font-normal text-slate-500">(Optional)</span>}
+                </p>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setIsCustomMode(true);
+                        setIsOpen(false);
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-slate-200"
+                >
+                    Manual entry
+                </button>
+            </div>
+
+            {selectedName ? (
+                <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950/80 p-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600/20 text-xs font-bold text-blue-300 border border-blue-500/30">
+                            {selectedName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-white">{selectedName}</p>
+                            <p className="truncate text-[11px] font-mono text-slate-400">
+                                {selectedPhone || <span className="text-amber-400">⚠️ No phone assigned</span>}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(true)}
+                            className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-500/10 font-medium"
+                        >
+                            Change
+                        </button>
+                        {isOptional && (
+                            <button
+                                type="button"
+                                onClick={() => onChange({ uid: undefined, name: "", phone: "" })}
+                                className="rounded-lg px-1.5 py-1 text-xs text-slate-500 hover:text-red-400"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="flex w-full items-center justify-between rounded-xl border border-dashed border-slate-700 bg-slate-950/60 px-3 py-2.5 text-xs text-slate-400 hover:border-slate-500 hover:text-white transition"
+                >
+                    <span className="flex items-center gap-2">
+                        <IconUser className="h-4 w-4" />
+                        Select a team member...
+                    </span>
+                    <span className="text-slate-500">▼</span>
+                </button>
+            )}
+
+            {isOpen && (
+                <div className="mt-1 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl space-y-2 z-10 relative">
+                    <div className="relative">
+                        <IconSearch className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Filter team members..."
+                            autoFocus
+                            className="w-full rounded-lg border border-slate-700 bg-slate-950 pl-8 pr-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                        />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                        {availableMembers.length === 0 ? (
+                            <p className="p-3 text-center text-xs text-slate-500">No matching team members found.</p>
+                        ) : (
+                            availableMembers.map((m) => (
+                                <button
+                                    key={m.uid}
+                                    type="button"
+                                    onClick={() => {
+                                        onChange({
+                                            uid: m.uid,
+                                            name: m.displayName,
+                                            phone: m.phoneNumber || ""
+                                        });
+                                        setIsOpen(false);
+                                        setSearch("");
+                                    }}
+                                    className="flex w-full items-center justify-between rounded-lg p-2 text-left text-xs hover:bg-slate-800 transition"
+                                >
+                                    <div>
+                                        <p className="font-semibold text-white">{m.displayName}</p>
+                                        <p className="text-[11px] text-slate-400">
+                                            {m.phoneNumber ? (
+                                                <span className="font-mono">{m.phoneNumber}</span>
+                                            ) : (
+                                                <span className="text-amber-400 font-semibold">No phone on file</span>
+                                            )}{" "}
+                                            · <span className="capitalize">{m.role}</span>
+                                        </p>
+                                    </div>
+                                    {m.active && (
+                                        <span className="h-2 w-2 rounded-full bg-emerald-400" title="Active on duty" />
+                                    )}
+                                </button>
+                            ))
+                        )}
+                    </div>
+                    <div className="border-t border-slate-800 pt-1.5 flex justify-between items-center text-[11px]">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsCustomMode(true);
+                                setIsOpen(false);
+                            }}
+                            className="text-blue-400 hover:underline"
+                        >
+                            Enter custom host manually
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(false)}
+                            className="text-slate-400 hover:text-white"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 type FormProps = {
     event: Event | null;
     otherEvents: Event[];
+    members: OrgMember[];
     onSave: (data: Omit<Event, "id">, id?: string) => void;
     onDelete: (id: string) => void;
     onClose: () => void;
 };
 
-function EventForm({ event, otherEvents, onSave, onDelete, onClose }: FormProps) {
+function EventForm({ event, otherEvents, members, onSave, onDelete, onClose }: FormProps) {
     const [title, setTitle] = useState(event?.title ?? "");
     const [renterName, setRenterName] = useState(event?.renterName ?? "");
     const [renterPhone, setRenterPhone] = useState(event?.renterPhone ?? "");
     const [start, setStart] = useState(event ? toInputValue(event.start) : "");
     const [end, setEnd] = useState(event ? toInputValue(event.end) : "");
+
+    // Recurrence state
+    const [recurrence, setRecurrence] = useState<RecurrenceType>(event?.recurrence ?? "none");
+    const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
+        event?.daysOfWeek && event.daysOfWeek.length > 0 ? event.daysOfWeek : [1] // default Monday
+    );
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>(
+        event?.recurrenceEndDate ? toDateInputValue(event.recurrenceEndDate) : ""
+    );
+
+    // Host states
+    const [primaryUid, setPrimaryUid] = useState<string | undefined>(event?.primaryUid);
     const [primaryName, setPrimaryName] = useState(event?.primaryName ?? "");
     const [primaryPhone, setPrimaryPhone] = useState(event?.primaryPhone ?? "");
+
+    const [backupUid, setBackupUid] = useState<string | undefined>(event?.backupUid);
     const [backupName, setBackupName] = useState(event?.backupName ?? "");
     const [backupPhone, setBackupPhone] = useState(event?.backupPhone ?? "");
+
     const [error, setError] = useState("");
+
+    const toggleDay = (dayIndex: number) => {
+        if (daysOfWeek.includes(dayIndex)) {
+            if (daysOfWeek.length > 1) {
+                setDaysOfWeek(daysOfWeek.filter((d) => d !== dayIndex));
+            }
+        } else {
+            setDaysOfWeek([...daysOfWeek, dayIndex].sort());
+        }
+    };
 
     function handleSubmit(ev: SyntheticEvent) {
         ev.preventDefault();
@@ -336,19 +707,32 @@ function EventForm({ event, otherEvents, onSave, onDelete, onClose }: FormProps)
         if (!title.trim()) return setError("Please enter an event title.");
         if (!start || !end || endDate <= startDate) return setError("End time must be after the start time.");
         if (!primaryName.trim() || digitsOnly(primaryPhone).length < 7)
-            return setError("Enter the primary host's name and a valid phone number.");
+            return setError("Please assign a primary host with a valid phone number.");
 
         // backup is optional, but needs a name and phone if used
         if (backupName.trim() || backupPhone.trim()) {
             if (!backupName.trim() || digitsOnly(backupPhone).length < 7)
                 return setError("Enter both a name and a valid phone for the backup host, or leave both empty.");
             if (digitsOnly(backupPhone) === digitsOnly(primaryPhone))
-                return setError("Primary and backup hosts must be different people.");
+                return setError("Primary and backup hosts must have different phone numbers.");
         }
 
-        // one number can only ring one host at a time
-        const clash = otherEvents.find((o) => startDate < o.end && endDate > o.start);
-        if (clash) return setError(`This overlaps "${clash.title}". Pick a different time.`);
+        if (recurrence === "weekly" && daysOfWeek.length === 0) {
+            return setError("Please select at least one day of the week for weekly recurrence.");
+        }
+
+        const recEndDate = recurrence !== "none" && recurrenceEndDate ? new Date(recurrenceEndDate) : null;
+        if (recEndDate && recEndDate < startDate) {
+            return setError("Recurrence end date cannot be earlier than start date.");
+        }
+
+        // Clash check for single events
+        if (recurrence === "none") {
+            const clash = otherEvents.find(
+                (o) => (!o.recurrence || o.recurrence === "none") && startDate < o.end && endDate > o.start
+            );
+            if (clash) return setError(`This overlaps with single event "${clash.title}".`);
+        }
 
         onSave(
             {
@@ -357,10 +741,15 @@ function EventForm({ event, otherEvents, onSave, onDelete, onClose }: FormProps)
                 renterPhone: renterPhone.trim(),
                 start: startDate,
                 end: endDate,
+                primaryUid,
                 primaryName: primaryName.trim(),
                 primaryPhone: primaryPhone.trim(),
+                backupUid,
                 backupName: backupName.trim(),
-                backupPhone: backupPhone.trim()
+                backupPhone: backupPhone.trim(),
+                recurrence,
+                daysOfWeek: recurrence === "weekly" ? daysOfWeek : [],
+                recurrenceEndDate: recEndDate
             },
             event?.id
         );
@@ -373,47 +762,132 @@ function EventForm({ event, otherEvents, onSave, onDelete, onClose }: FormProps)
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center backdrop-blur-sm">
             <form
                 onSubmit={handleSubmit}
-                className="max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:max-w-lg shadow-2xl"
+                className="max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:max-w-xl shadow-2xl"
             >
-                <h2 className="mb-4 text-xl font-bold text-white">{event ? "Edit event" : "New event"}</h2>
+                <h2 className="mb-4 text-xl font-bold text-white">
+                    {event ? "Edit schedule / event" : "New schedule / event"}
+                </h2>
 
-                <div className="space-y-3">
-                    <input
-                        className={input}
-                        placeholder="Event title (e.g. Somerville Soccer Game)"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                    />
-                    <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">Event Title</label>
                         <input
                             className={input}
-                            placeholder="Renter name (optional)"
-                            value={renterName}
-                            onChange={(e) => setRenterName(e.target.value)}
-                        />
-                        <input
-                            className={input}
-                            type="tel"
-                            placeholder="Renter phone (optional)"
-                            value={renterPhone}
-                            onChange={(e) => setRenterPhone(e.target.value)}
+                            placeholder="e.g. Somerville Soccer Game, Friday Open Gym"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
                         />
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="text-xs text-slate-400">
-                            Start Time
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                Renter / Organizer (Optional)
+                            </label>
                             <input
                                 className={input}
+                                placeholder="e.g. Somerville Youth League"
+                                value={renterName}
+                                onChange={(e) => setRenterName(e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                Renter Phone (Optional)
+                            </label>
+                            <input
+                                className={input}
+                                type="tel"
+                                placeholder="+1 (617) 555-0199"
+                                value={renterPhone}
+                                onChange={(e) => setRenterPhone(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Schedule Recurrence Section */}
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3.5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-300">
+                                <IconRepeat className="h-4 w-4" />
+                                Repeat / Schedule Recurrence
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            {[
+                                { id: "none", label: "One-Time" },
+                                { id: "daily", label: "Daily" },
+                                { id: "weekdays", label: "Mon – Fri" },
+                                { id: "weekly", label: "Weekly Schedule" }
+                            ].map((opt) => (
+                                <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setRecurrence(opt.id as RecurrenceType)}
+                                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                                        recurrence === opt.id
+                                            ? "border-purple-500 bg-purple-500/20 text-white shadow"
+                                            : "border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white"
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {recurrence === "weekly" && (
+                            <div className="space-y-1.5 pt-1">
+                                <p className="text-xs text-slate-400">Select active days:</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {DAY_NAMES.map((name, idx) => (
+                                        <button
+                                            key={name}
+                                            type="button"
+                                            onClick={() => toggleDay(idx)}
+                                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                                                daysOfWeek.includes(idx)
+                                                    ? "bg-purple-600 text-white"
+                                                    : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                                            }`}
+                                        >
+                                            {name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {recurrence !== "none" && (
+                            <div className="pt-1">
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    Repeat Until (Optional End Date)
+                                </label>
+                                <input
+                                    className={input}
+                                    type="date"
+                                    value={recurrenceEndDate}
+                                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Timing */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-slate-300">
+                            {recurrence === "none" ? "Start Date & Time" : "Daily Start Time / First Date"}
+                            <input
+                                className={`mt-1 ${input}`}
                                 type="datetime-local"
                                 value={start}
                                 onChange={(e) => setStart(e.target.value)}
                             />
                         </label>
-                        <label className="text-xs text-slate-400">
-                            End Time
+                        <label className="text-xs font-semibold text-slate-300">
+                            {recurrence === "none" ? "End Date & Time" : "Daily End Time"}
                             <input
-                                className={input}
+                                className={`mt-1 ${input}`}
                                 type="datetime-local"
                                 value={end}
                                 onChange={(e) => setEnd(e.target.value)}
@@ -421,43 +895,40 @@ function EventForm({ event, otherEvents, onSave, onDelete, onClose }: FormProps)
                         </label>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 pt-2">
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold text-slate-300">Primary Host</p>
-                            <input
-                                className={input}
-                                placeholder="Full name"
-                                value={primaryName}
-                                onChange={(e) => setPrimaryName(e.target.value)}
-                            />
-                            <input
-                                className={input}
-                                type="tel"
-                                placeholder="Phone (+16175550142)"
-                                value={primaryPhone}
-                                onChange={(e) => setPrimaryPhone(e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <p className="text-xs font-semibold text-slate-300">Backup Host (optional)</p>
-                            <input
-                                className={input}
-                                placeholder="Full name"
-                                value={backupName}
-                                onChange={(e) => setBackupName(e.target.value)}
-                            />
-                            <input
-                                className={input}
-                                type="tel"
-                                placeholder="Phone (+16175550142)"
-                                value={backupPhone}
-                                onChange={(e) => setBackupPhone(e.target.value)}
-                            />
-                        </div>
+                    {/* Host Team Member Selectors */}
+                    <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-slate-800">
+                        <HostMemberSelect
+                            label="Primary Host"
+                            selectedUid={primaryUid}
+                            selectedName={primaryName}
+                            selectedPhone={primaryPhone}
+                            members={members}
+                            excludeUid={backupUid}
+                            onChange={(m) => {
+                                setPrimaryUid(m.uid);
+                                setPrimaryName(m.name);
+                                setPrimaryPhone(m.phone);
+                            }}
+                        />
+
+                        <HostMemberSelect
+                            label="Backup Host"
+                            selectedUid={backupUid}
+                            selectedName={backupName}
+                            selectedPhone={backupPhone}
+                            members={members}
+                            excludeUid={primaryUid}
+                            isOptional={true}
+                            onChange={(m) => {
+                                setBackupUid(m.uid);
+                                setBackupName(m.name);
+                                setBackupPhone(m.phone);
+                            }}
+                        />
                     </div>
                 </div>
 
-                <p className="mt-3 min-h-5 text-xs text-red-400">{error}</p>
+                <p className="mt-4 min-h-5 text-xs text-red-400">{error}</p>
 
                 <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-800 pt-3">
                     <div>
@@ -481,7 +952,7 @@ function EventForm({ event, otherEvents, onSave, onDelete, onClose }: FormProps)
                         </button>
                         <button
                             type="submit"
-                            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition shadow"
+                            className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition shadow"
                         >
                             {event ? "Save changes" : "Create event"}
                         </button>

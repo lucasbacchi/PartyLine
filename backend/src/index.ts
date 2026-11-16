@@ -29,7 +29,28 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "https://partyline.lucasb
     .filter(Boolean);
 
 app.disable("x-powered-by");
-app.use(cors({ origin: allowedOrigins }));
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+            if (!origin) {
+                return callback(null, true);
+            }
+            // Allow exact match from configured origins
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            // Allow any localhost or 127.0.0.1 port in local development
+            if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+                return callback(null, true);
+            }
+            return callback(null, false);
+        },
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Firebase-AppCheck"]
+    })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

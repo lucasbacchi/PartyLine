@@ -1,7 +1,9 @@
 import { Router, type Request, type Response } from "express";
+import twilio from "twilio";
 import { db } from "../firebase.js";
 import { requireTenantMember, getTenantIdParam } from "../middleware/tenantAuth.js";
-import { getTwilioClient } from "../twilio.js";
+import { writeRateLimit } from "../middleware/rateLimit.js";
+import { getTwilioClient, validateTwilioPhoneNumber } from "../twilio.js";
 
 const router = Router({ mergeParams: true });
 
@@ -186,6 +188,144 @@ router.get("/texts", requireTenantMember, async (req: Request, res: Response) =>
     } catch (error) {
         console.error("Twilio text history fetch failed", error);
         res.status(502).json({ error: "Unable to fetch text history from Twilio." });
+    }
+});
+
+// POST /tenants/:tenantId/texts - Send an SMS message
+router.post("/texts", requireTenantMember, writeRateLimit, async (req: Request, res: Response) => {
+    try {
+        const tenantId = getTenantIdParam(req);
+        const { to, body, from } = req.body ?? {};
+
+        if (!body || typeof body !== "string" || !body.trim()) {
+            res.status(400).json({ error: "Message body is required." });
+            return;
+        }
+
+        const cleanBody = body.trim().slice(0, 1600);
+        const cleanTo = validateTwilioPhoneNumber(to, "to");
+
+        const tenant = await loadTenantNumbers(tenantId);
+        if (!tenant.exists || tenant.numbers.length === 0) {
+            res.status(400).json({ error: "Organization has no configured phone numbers to send from." });
+            return;
+        }
+
+        // Pick requested 'from' or tenant's primary/first number
+        let senderNumber = tenant.numbers[0];
+        if (typeof from === "string" && tenant.numbers.includes(from.trim())) {
+            senderNumber = from.trim();
+        }
+
+        const client = getTwilioClient();
+        const sent = await client.messages.create({
+            from: senderNumber,
+            to: cleanTo,
+            body: cleanBody
+        });
+
+        // Store event in twilio_events
+        await db.collection("twilio_events").add({
+            type: "sms",
+            sid: sent.sid,
+            from: sent.from,
+            to: sent.to,
+            body: cleanBody,
+            direction: "outbound-api",
+            status: sent.status,
+            tenantId,
+            receivedAt: new Date()
+        });
+
+        res.status(201).json({
+            message: {
+                sid: sent.sid,
+                from: sent.from,
+                to: sent.to,
+                body: cleanBody,
+                status: sent.status,
+                direction: "outbound-api",
+                createdAt: sent.dateCreated ? sent.dateCreated.toISOString() : new Date().toISOString(),
+                sentAt: sent.dateSent ? sent.dateSent.toISOString() : new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error("Twilio send SMS error:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Unable to send SMS message." });
+    }
+});
+
+// POST /tenants/:tenantId/calls - Initiate a call back (Twilio bridge)
+router.post("/calls", requireTenantMember, writeRateLimit, async (req: Request, res: Response) => {
+    try {
+        const tenantId = getTenantIdParam(req);
+        const { to, memberPhone } = req.body ?? {};
+
+        const cleanTo = validateTwilioPhoneNumber(to, "to");
+
+        const tenant = await loadTenantNumbers(tenantId);
+        if (!tenant.exists || tenant.numbers.length === 0) {
+            res.status(400).json({ error: "Organization has no configured phone numbers." });
+            return;
+        }
+
+        const senderNumber = tenant.numbers[0];
+
+        // Determine destination for bridge: member's phone number
+        let targetMemberPhone = typeof memberPhone === "string" ? memberPhone.trim() : "";
+        if (!targetMemberPhone && res.locals.user?.uid) {
+            const memberDoc = await db
+                .collection("tenants")
+                .doc(tenantId)
+                .collection("members")
+                .doc(res.locals.user.uid)
+                .get();
+            targetMemberPhone = memberDoc.data()?.phoneNumber || "";
+        }
+
+        if (!targetMemberPhone) {
+            res.status(400).json({
+                error: "No member phone number found to bridge call to. Please configure a contact phone number on your profile."
+            });
+            return;
+        }
+
+        const cleanMemberPhone = validateTwilioPhoneNumber(targetMemberPhone, "memberPhone");
+
+        const client = getTwilioClient();
+        const voiceResponse = new twilio.twiml.VoiceResponse();
+        const dial = voiceResponse.dial({ callerId: senderNumber });
+        dial.number(cleanTo);
+
+        const call = await client.calls.create({
+            from: senderNumber,
+            to: cleanMemberPhone,
+            twiml: voiceResponse.toString()
+        });
+
+        await db.collection("twilio_events").add({
+            type: "call",
+            sid: call.sid,
+            from: senderNumber,
+            to: cleanTo,
+            memberPhone: cleanMemberPhone,
+            status: call.status,
+            direction: "outbound-dial",
+            tenantId,
+            receivedAt: new Date()
+        });
+
+        res.status(201).json({
+            call: {
+                sid: call.sid,
+                status: call.status,
+                from: senderNumber,
+                to: cleanTo
+            }
+        });
+    } catch (error) {
+        console.error("Twilio call back error:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Unable to initiate call back." });
     }
 });
 

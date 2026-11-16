@@ -16,6 +16,57 @@ function parseDate(value: unknown, fieldName: string): Date {
     return d;
 }
 
+function isEventCurrentlyActive(data: Record<string, unknown>, now: Date = new Date()): boolean {
+    const startDate =
+        data.start && typeof (data.start as { toDate?: () => Date }).toDate === "function"
+            ? (data.start as { toDate: () => Date }).toDate()
+            : new Date(data.start as string | number);
+    const endDate =
+        data.end && typeof (data.end as { toDate?: () => Date }).toDate === "function"
+            ? (data.end as { toDate: () => Date }).toDate()
+            : new Date(data.end as string | number);
+
+    const recurrence = (data.recurrence as string) || "none";
+    if (recurrence === "none") {
+        return now >= startDate && now <= endDate;
+    }
+
+    const recEnd =
+        data.recurrenceEndDate && typeof (data.recurrenceEndDate as { toDate?: () => Date }).toDate === "function"
+            ? (data.recurrenceEndDate as { toDate: () => Date }).toDate()
+            : data.recurrenceEndDate
+              ? new Date(data.recurrenceEndDate as string | number)
+              : null;
+
+    if (recEnd) {
+        const endOfDay = new Date(recEnd);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (now > endOfDay) return false;
+    }
+
+    const startDay = new Date(startDate);
+    startDay.setHours(0, 0, 0, 0);
+    if (now < startDay) return false;
+
+    const dayOfWeek = now.getDay();
+    if (recurrence === "weekly") {
+        const days = Array.isArray(data.daysOfWeek) ? (data.daysOfWeek as number[]) : [];
+        if (!days.includes(dayOfWeek)) return false;
+    } else if (recurrence === "weekdays") {
+        if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+    }
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+
+    if (endMinutes >= startMinutes) {
+        return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    } else {
+        return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+    }
+}
+
 // GET /tenants/:tenantId/events - List events
 router.get("/", requireTenantMember, async (req: Request, res: Response) => {
     try {
@@ -37,8 +88,21 @@ router.get("/", requireTenantMember, async (req: Request, res: Response) => {
                 const endDate = data.end?.toDate ? data.end.toDate() : new Date(data.end);
 
                 let eventStatus: "active" | "upcoming" | "past" = "past";
-                if (now >= startDate && now <= endDate) {
+                if (isEventCurrentlyActive(data, now)) {
                     eventStatus = "active";
+                } else if (data.recurrence && data.recurrence !== "none") {
+                    const recEnd = data.recurrenceEndDate?.toDate
+                        ? data.recurrenceEndDate.toDate()
+                        : data.recurrenceEndDate
+                          ? new Date(data.recurrenceEndDate)
+                          : null;
+                    if (recEnd) {
+                        const endOfDay = new Date(recEnd);
+                        endOfDay.setHours(23, 59, 59, 999);
+                        eventStatus = now > endOfDay ? "past" : "upcoming";
+                    } else {
+                        eventStatus = "upcoming";
+                    }
                 } else if (now < startDate) {
                     eventStatus = "upcoming";
                 }
@@ -72,17 +136,10 @@ router.get("/current", requireTenantMember, async (req: Request, res: Response) 
         const tenantId = getTenantIdParam(req);
         const now = new Date();
 
-        const snapshot = await db
-            .collection("tenants")
-            .doc(tenantId)
-            .collection("events")
-            .where("start", "<=", now)
-            .get();
+        const snapshot = await db.collection("tenants").doc(tenantId).collection("events").get();
 
         const activeEventDoc = snapshot.docs.find((doc) => {
-            const data = doc.data();
-            const endDate = data.end?.toDate ? data.end.toDate() : new Date(data.end);
-            return endDate >= now;
+            return isEventCurrentlyActive(doc.data(), now);
         });
 
         if (!activeEventDoc) {
@@ -121,7 +178,10 @@ router.post("/", requireTenantAdmin, writeRateLimit, async (req: Request, res: R
             backupUid,
             backupName,
             backupPhone,
-            notes
+            notes,
+            recurrence,
+            daysOfWeek,
+            recurrenceEndDate
         } = req.body ?? {};
 
         if (!title || typeof title !== "string" || !title.trim()) {
@@ -161,6 +221,9 @@ router.post("/", requireTenantAdmin, writeRateLimit, async (req: Request, res: R
             backupName: typeof backupName === "string" ? backupName.trim().slice(0, 100) : "",
             backupPhone: typeof backupPhone === "string" ? backupPhone.trim() : "",
             notes: typeof notes === "string" ? notes.trim().slice(0, 1000) : "",
+            recurrence: typeof recurrence === "string" ? recurrence : "none",
+            daysOfWeek: Array.isArray(daysOfWeek) ? daysOfWeek : [],
+            recurrenceEndDate: recurrenceEndDate ? new Date(recurrenceEndDate) : null,
             createdAt: now,
             updatedAt: now
         };
@@ -225,7 +288,10 @@ router.patch("/:eventId", requireTenantAdmin, writeRateLimit, async (req: Reques
             backupUid,
             backupName,
             backupPhone,
-            notes
+            notes,
+            recurrence,
+            daysOfWeek,
+            recurrenceEndDate
         } = req.body ?? {};
 
         if (title !== undefined) updates.title = String(title).trim().slice(0, 150);
@@ -240,6 +306,10 @@ router.patch("/:eventId", requireTenantAdmin, writeRateLimit, async (req: Reques
         if (backupName !== undefined) updates.backupName = String(backupName).trim().slice(0, 100);
         if (backupPhone !== undefined) updates.backupPhone = String(backupPhone).trim();
         if (notes !== undefined) updates.notes = String(notes).trim().slice(0, 1000);
+        if (recurrence !== undefined) updates.recurrence = String(recurrence);
+        if (daysOfWeek !== undefined) updates.daysOfWeek = Array.isArray(daysOfWeek) ? daysOfWeek : [];
+        if (recurrenceEndDate !== undefined)
+            updates.recurrenceEndDate = recurrenceEndDate ? new Date(recurrenceEndDate) : null;
 
         const eventRef = db.collection("tenants").doc(tenantId).collection("events").doc(eventId);
         const existing = await eventRef.get();

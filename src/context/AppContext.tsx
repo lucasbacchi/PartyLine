@@ -99,6 +99,15 @@ type AppContextType = {
         phoneNumber?: string;
         role: TenantRole;
     }) => Promise<void>;
+    updateMember: (
+        uid: string,
+        updates: {
+            displayName?: string;
+            phoneNumber?: string;
+            role?: TenantRole;
+            active?: boolean;
+        }
+    ) => Promise<void>;
     updateMemberRole: (uid: string, role: TenantRole) => Promise<void>;
     toggleMemberActive: (uid: string, active: boolean) => Promise<void>;
     removeMember: (uid: string) => Promise<void>;
@@ -542,24 +551,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await setDoc(memberDocRef, memberData);
     };
 
-    // 12. Update member role
-    const updateMemberRole = async (uid: string, role: TenantRole) => {
+    // 12. Update member details (name, phone, role, active)
+    const updateMember = async (
+        uid: string,
+        updates: {
+            displayName?: string;
+            phoneNumber?: string;
+            role?: TenantRole;
+            active?: boolean;
+        }
+    ) => {
         if (!currentTenant?.id) return;
 
         const memberDocRef = doc(db, "tenants", currentTenant.id, "members", uid);
-        await updateDoc(memberDocRef, { role, updatedAt: new Date() });
+        const dataToUpdate: Record<string, unknown> = {
+            updatedAt: new Date()
+        };
 
-        // Also update user's personal membership reference if exists
-        const userMembershipRef = doc(db, "users", uid, "memberships", currentTenant.id);
-        setDoc(userMembershipRef, { role }, { merge: true }).catch(() => {});
+        if (updates.displayName !== undefined) {
+            dataToUpdate.displayName = updates.displayName.trim();
+        }
+        if (updates.phoneNumber !== undefined) {
+            dataToUpdate.phoneNumber = updates.phoneNumber.trim();
+        }
+        if (updates.role !== undefined) {
+            dataToUpdate.role = updates.role;
+        }
+        if (updates.active !== undefined) {
+            dataToUpdate.active = Boolean(updates.active);
+        }
+
+        await updateDoc(memberDocRef, dataToUpdate);
+
+        // If role changed, update user's personal membership reference
+        if (updates.role !== undefined) {
+            const userMembershipRef = doc(db, "users", uid, "memberships", currentTenant.id);
+            setDoc(userMembershipRef, { role: updates.role }, { merge: true }).catch(() => {});
+        }
+
+        // If current logged-in user is editing their own record, sync profile document
+        if (user && uid === user.uid) {
+            const userProfileUpdates: Record<string, unknown> = {};
+            if (updates.displayName !== undefined) userProfileUpdates.displayName = updates.displayName.trim();
+            if (updates.phoneNumber !== undefined) userProfileUpdates.phoneNumber = updates.phoneNumber.trim();
+            if (Object.keys(userProfileUpdates).length > 0) {
+                const userDocRef = doc(db, "users", user.uid);
+                setDoc(userDocRef, userProfileUpdates, { merge: true }).catch(() => {});
+            }
+        }
     };
 
-    // 13. Toggle member active status
-    const toggleMemberActive = async (uid: string, active: boolean) => {
-        if (!currentTenant?.id) return;
+    // 13. Update member role
+    const updateMemberRole = async (uid: string, role: TenantRole) => {
+        await updateMember(uid, { role });
+    };
 
-        const memberDocRef = doc(db, "tenants", currentTenant.id, "members", uid);
-        await updateDoc(memberDocRef, { active, updatedAt: new Date() });
+    // 14. Toggle member active status
+    const toggleMemberActive = async (uid: string, active: boolean) => {
+        await updateMember(uid, { active });
     };
 
     // 14. Remove member
@@ -739,6 +788,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 removePhoneNumber,
                 setPrimaryPhoneNumber,
                 addMember,
+                updateMember,
                 updateMemberRole,
                 toggleMemberActive,
                 removeMember,

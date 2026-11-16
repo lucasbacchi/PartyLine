@@ -10,7 +10,8 @@ import {
     IconShield,
     IconCopy,
     IconCheck,
-    IconCheckCircle
+    IconCheckCircle,
+    IconEdit
 } from "../components/Icons";
 
 export function meta() {
@@ -40,6 +41,7 @@ export default function OrgUsersPage() {
         members,
         invites,
         addMember,
+        updateMember,
         updateMemberRole,
         toggleMemberActive,
         removeMember,
@@ -55,6 +57,15 @@ export default function OrgUsersPage() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [memberToDelete, setMemberToDelete] = useState<OrgMember | null>(null);
+    const [memberToEdit, setMemberToEdit] = useState<OrgMember | null>(null);
+
+    // Form inputs for editing a member
+    const [editDisplayName, setEditDisplayName] = useState("");
+    const [editPhone, setEditPhone] = useState("");
+    const [editRole, setEditRole] = useState<TenantRole>("member");
+    const [editActive, setEditActive] = useState(true);
+    const [editError, setEditError] = useState("");
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
 
     // Form inputs for direct member add
     const [newDisplayName, setNewDisplayName] = useState("");
@@ -88,6 +99,41 @@ export default function OrgUsersPage() {
             return matchesSearch && matchesRole && matchesStatus;
         });
     }, [members, searchQuery, roleFilter, statusFilter]);
+
+    const openEditModal = (m: OrgMember) => {
+        setMemberToEdit(m);
+        setEditDisplayName(m.displayName);
+        setEditPhone(m.phoneNumber || "");
+        setEditRole(m.role);
+        setEditActive(m.active);
+        setEditError("");
+    };
+
+    const handleSaveEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!memberToEdit) return;
+        setEditError("");
+        if (!editDisplayName.trim()) {
+            setEditError("Display name cannot be empty.");
+            return;
+        }
+
+        setIsSavingEdit(true);
+        try {
+            await updateMember(memberToEdit.uid, {
+                displayName: editDisplayName.trim(),
+                phoneNumber: editPhone.trim(),
+                role: editRole,
+                active: editActive
+            });
+            setMemberToEdit(null);
+            showToast("Member information updated successfully.");
+        } catch (err) {
+            setEditError(err instanceof Error ? err.message : "Failed to update member.");
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
 
     const handleAddMember = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -402,19 +448,29 @@ export default function OrgUsersPage() {
                                                         </td>
 
                                                         <td className="px-6 py-4 text-right">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setMemberToDelete(m)}
-                                                                disabled={
-                                                                    m.role === "owner" &&
-                                                                    members.filter((x) => x.role === "owner").length <=
-                                                                        1
-                                                                }
-                                                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition disabled:opacity-30 disabled:pointer-events-none"
-                                                                title="Remove user from organization"
-                                                            >
-                                                                <IconTrash className="h-4 w-4" />
-                                                            </button>
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openEditModal(m)}
+                                                                    className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-500/10 hover:text-blue-400 transition"
+                                                                    title="Edit member details"
+                                                                >
+                                                                    <IconEdit className="h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setMemberToDelete(m)}
+                                                                    disabled={
+                                                                        m.role === "owner" &&
+                                                                        members.filter((x) => x.role === "owner")
+                                                                            .length <= 1
+                                                                    }
+                                                                    className="rounded-lg p-1.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition disabled:opacity-30 disabled:pointer-events-none"
+                                                                    title="Remove user from organization"
+                                                                >
+                                                                    <IconTrash className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );
@@ -549,6 +605,117 @@ export default function OrgUsersPage() {
                         </div>
                     </main>
                 </>
+            )}
+
+            {/* Modal: Edit Member */}
+            {memberToEdit && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+                    <form
+                        onSubmit={handleSaveEdit}
+                        className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4"
+                    >
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Edit Team Member</h3>
+                                <p className="text-xs text-slate-400">{memberToEdit.email}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setMemberToEdit(null)}
+                                className="text-slate-400 hover:text-white"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {editError && (
+                            <p className="rounded-lg bg-red-500/10 border border-red-500/30 p-2 text-xs text-red-300">
+                                {editError}
+                            </p>
+                        )}
+
+                        <div>
+                            <label className="block text-xs font-medium text-slate-300">Full Name</label>
+                            <input
+                                type="text"
+                                required
+                                value={editDisplayName}
+                                onChange={(e) => setEditDisplayName(e.target.value)}
+                                className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-slate-300">
+                                Contact Phone Number (for call routing & SMS)
+                            </label>
+                            <input
+                                type="tel"
+                                value={editPhone}
+                                onChange={(e) => setEditPhone(e.target.value)}
+                                placeholder="+1 (617) 555-0123"
+                                className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none font-mono"
+                            />
+                            <p className="mt-1 text-[11px] text-slate-400">
+                                When this member is assigned to an active event, incoming calls will route here.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-slate-300">Role & Access Level</label>
+                            <select
+                                value={editRole}
+                                onChange={(e) => setEditRole(e.target.value as TenantRole)}
+                                className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                            >
+                                <option value="owner">Owner (Full control over organization & billing)</option>
+                                <option value="admin">Admin (Manage team, edit schedules & settings)</option>
+                                <option value="member">Member (Regular host on duty, answers calls)</option>
+                                <option value="viewer">Viewer (View-only schedule access)</option>
+                            </select>
+                            <p className="mt-1 text-[11px] text-slate-400">{ROLE_DESCRIPTIONS[editRole]}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                            <div>
+                                <p className="text-xs font-medium text-white">Active Availability Status</p>
+                                <p className="text-[11px] text-slate-400">
+                                    {editActive ? "Member is currently available for duty" : "Member is paused / away"}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setEditActive(!editActive)}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                    editActive ? "bg-emerald-600" : "bg-slate-700"
+                                }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                        editActive ? "translate-x-6" : "translate-x-1"
+                                    }`}
+                                />
+                            </button>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                            <button
+                                type="button"
+                                onClick={() => setMemberToEdit(null)}
+                                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSavingEdit}
+                                className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition shadow disabled:opacity-50"
+                            >
+                                {isSavingEdit ? "Saving..." : "Save Changes"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             )}
 
             {/* Modal: Add Member Directly */}
